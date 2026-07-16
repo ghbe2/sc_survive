@@ -49,10 +49,10 @@
         #score-val { font-weight: bold; font-size: 18px; color: #fff; transition: color 0.2s; }
         #score-mult { font-size: 11px; color: #888; }
         .status-group { position: absolute; top: 10px; right: 10px; width: 160px; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
-        #menu-btns { position: absolute; bottom: 28px; right: 12px; display: flex; flex-direction: column; gap: 12px; pointer-events: auto; align-items: flex-end; }
-        .hud-btn { background: rgba(0,0,0,0.8); border: 1px solid #666; border-radius: 12px; color: #eee; font-size: 15px; padding: 10px 14px; cursor: pointer; font-family: inherit; }
-        .hud-btn:active { transform: scale(0.95); }
-        .hud-btn.ready-glow { border-color: #0f8; box-shadow: 0 0 14px #0f8; color: #cffde8; }
+        #top-members { position: absolute; top: 44px; left: 50%; transform: translateX(-50%); pointer-events: auto; }
+        .big-btn { flex: 1; padding: 15px 0; background: rgba(0,0,0,0.8); border: 1px solid #666; border-radius: 14px; color: #eee; font-size: 16px; font-weight: bold; cursor: pointer; font-family: inherit; }
+        .big-btn:active { transform: scale(0.97); }
+        .big-btn.ready-glow { border-color: #0f8; box-shadow: 0 0 14px #0f8; color: #cffde8; }
         #time-display { color: #8ff; font-size: 12px; font-weight: bold; }
         .bar-bg { position: relative; width: 100%; height: 12px; background: #333; border-radius: 6px; overflow: hidden; border: 1px solid #555; }
         #sex-bar { height: 100%; background: linear-gradient(90deg, #f0f, #ff69b4); width: 0%; }
@@ -63,7 +63,7 @@
         #joystick-base { position: absolute; width: 120px; height: 120px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 50%; display: none; pointer-events: none; left: 50%; top: 50%; transform: translate(-50%, -50%); }
         #joystick-stick { position: absolute; width: 30px; height: 30px; background: rgba(255,255,255,0.2); border-radius: 50%; left: 45px; top: 45px; }
 
-        #bottom-controls { position: absolute; bottom: 30px; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 15px; pointer-events: auto; }
+        #bottom-controls { position: absolute; bottom: 20px; left: 0; right: 0; display: flex; gap: 12px; padding: 0 14px; pointer-events: auto; }
         .member-btns { display: flex; gap: 10px; }
         .btn-member { position: relative; overflow: hidden; width: 50px; height: 50px; background: #222; border: 2px solid #444; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 24px; transition: 0.1s; }
         .btn-member.active { border-color: #f0f; box-shadow: 0 0 10px #f0f; background: #322; transform: scale(1.1); }
@@ -95,9 +95,8 @@
     </div>
 
     <div id="game-ui">
-        <div id="menu-btns">
-            <button class="hud-btn" onclick="openMissions()">🎯</button>
-            <button class="hud-btn" id="ec-btn" onclick="openEC()">🛒<span id="ec-btn-money">¥0</span></button>
+        <div id="top-members">
+            <div class="member-btns" id="member-btns"></div>
         </div>
         <div id="score-box">
             <div id="score-val">0</div>
@@ -111,7 +110,8 @@
         <div id="joystick-base"><div id="joystick-stick"></div></div>
         <div id="gesture-hint">引っ張る=移動　タップ=交代　長押し=爆発(♡消費)　止まる=チャージ</div>
         <div id="bottom-controls">
-            <div class="member-btns" id="member-btns"></div>
+            <button class="big-btn" onclick="openMissions()">🎯 ミッション</button>
+            <button class="big-btn" id="ec-btn" onclick="openEC()">🛒 ショップ <span id="ec-btn-money">¥0</span></button>
         </div>
     </div>
 
@@ -164,7 +164,7 @@ const CONFIG = {
     ENEMY_SPAWN_INTERVAL: 100, SPAWN_MIN_INTERVAL: 40, ENEMY_SPAWN_DIST: 500,
     TARGET_RANGE: 600,
     BULLET_SPEED: 12, BULLET_LIFE: 45, BULLET_SIZE: 5,
-    CONTACT_DIST: 40, CONTACT_INTERVAL: 20, CONTACT_SEX: 10, CONTACT_KNOCK: 20,
+    CONTACT_DIST: 40, CONTACT_INTERVAL: 20, CONTACT_SEX: 4, CONTACT_KNOCK: 20,
     ENEMY_BULLET_SEX: 15,
     PICKUP_RADIUS: 50,
     DROP_MONEY_RATE: 0.14, DROP_BLOOD_RATE: 0.42,            // 💰は控えめ / 🩸(ゲージ源)は多め
@@ -175,7 +175,7 @@ const CONFIG = {
     BOSS_ATK_INTERVAL: 90, BOSS_BULLET_SPD: 3.0,              // (未使用) ボスは弾を撃たない
     BOSS_RING_INTERVAL: 120,
     BOSS_SUMMON_INTERVAL: 150,                                // ボスは弾でなく手下を呼ぶ
-    BOSS_CONTACT_DIST: 60, BOSS_CONTACT_SEX: 15, BOSS_CONTACT_KNOCK: 50,   // 弱体化 (旧25)
+    BOSS_CONTACT_DIST: 60, BOSS_CONTACT_SEX: 6, BOSS_CONTACT_KNOCK: 50,
     KILL_INVULN: 60,
     SWITCH_COOLDOWN: 45,
     BENCH_SEX_REGEN: 0.01,     // 控えメンバーの快感自然発散/F (遅め。貯めた意味を保つ)
@@ -462,7 +462,7 @@ let moveTouchId = null;
 let lastTap = { t: 0, x: 0, y: 0 };
 const gestures = new Map();   // id -> {x, y, t, moved}
 
-function isUiTarget(t) { return !!(t && t.closest && (t.closest('#bottom-controls') || t.closest('#menu-btns') || t.closest('.overlay-menu'))); }
+function isUiTarget(t) { return !!(t && t.closest && (t.closest('#bottom-controls') || t.closest('#top-members') || t.closest('.overlay-menu'))); }
 function joyMove(x, y) {
     const dx = x - joyStart.x, dy = y - joyStart.y;
     const d = Math.hypot(dx, dy) || 1, m = Math.min(d, CONFIG.JOY_RADIUS);
@@ -821,8 +821,15 @@ function updateAttack(p) {
     const renMul = hasTrait(p, 'ren') ? 0.75 : 1;
     const cool = Math.max(5, Math.floor(p.cool * runMods.coolMul * renMul));
     if(frame % cool !== 0) return;
-    // 自動照準なし: 移動している向きに撃つ (止まっている間は最後に向いていた方向)
-    const vx = lastAim.x, vy = lastAim.y;
+    // 自動照準: 最寄りの敵を狙う。射程内に敵がいなければ移動向き
+    let target = null, best = Infinity;
+    const scan = boss ? enemies.concat([boss]) : enemies;
+    scan.forEach(t => {
+        const d = Math.hypot(t.x - worldX, t.y - worldY);
+        if(d < best) { best = d; target = t; }
+    });
+    let vx = lastAim.x, vy = lastAim.y;
+    if(target && best < CONFIG.TARGET_RANGE) { vx = target.x - worldX; vy = target.y - worldY; }
     // キャラ固有弾 (第1弾: 丑・寅・午・酉)
     switch(p.id) {
         case 1:
