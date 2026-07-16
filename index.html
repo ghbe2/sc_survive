@@ -1220,15 +1220,21 @@ function draw() {
     drops.forEach(d => ctx.fillText(d.t === 'money' ? '💰' : (d.t === 'package' ? '📦' : '🩸'), d.x-worldX+cx, d.y-worldY+cy+bob));
     ctx.fillStyle = "#0ff";
     bullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x-worldX+cx, b.y-worldY+cy, b.size, 0, 7); ctx.fill(); });
-    // 薙ぎ払い/オーラの一閃
+    // 薙ぎ払い=塗りの扇 / オーラ=自分中心の円 (攻撃範囲がそのまま見える)
     sweepFx.forEach(s => {
         s.l--;
-        ctx.strokeStyle = "#fff"; ctx.lineWidth = 5;
-        ctx.globalAlpha = Math.max(0, s.l / 12) * 0.6;
-        ctx.beginPath();
-        if(s.full) ctx.arc(cx, cy, s.r, 0, 7);
-        else ctx.arc(cx, cy, s.r * 0.8, s.ang - 1.05, s.ang + 1.05);
-        ctx.stroke();
+        const a = Math.max(0, s.l / 12);
+        if(s.full) {
+            ctx.fillStyle = "#fff"; ctx.globalAlpha = a * 0.22;
+            ctx.beginPath(); ctx.arc(cx, cy, s.r, 0, 7); ctx.fill();
+            ctx.strokeStyle = "#fff"; ctx.globalAlpha = a * 0.7; ctx.lineWidth = 4;
+            ctx.beginPath(); ctx.arc(cx, cy, s.r, 0, 7); ctx.stroke();
+        } else {
+            ctx.fillStyle = "#fff"; ctx.globalAlpha = a * 0.3;
+            ctx.beginPath(); ctx.moveTo(cx, cy);
+            ctx.arc(cx, cy, s.r, s.ang - 1.05, s.ang + 1.05);
+            ctx.closePath(); ctx.fill();
+        }
         ctx.globalAlpha = 1;
     });
     sweepFx = sweepFx.filter(s => s.l > 0);
