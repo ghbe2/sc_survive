@@ -1,0 +1,8 @@
+# Keep diffs stable across Fable/Codex and Windows environments.
+* text=auto
+*.html text eol=lf
+*.md text eol=lf
+*.toml text eol=lf
+*.css text eol=lf
+*.js text eol=lf
+

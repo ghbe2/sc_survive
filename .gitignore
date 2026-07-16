@@ -1,0 +1,8 @@
+# OS/editor noise only. Game assets and project docs should stay tracked.
+Thumbs.db
+.DS_Store
+*.swp
+*.tmp
+
+# Legacy/private local specification; AGENTS.md is the shared source of truth.
+/仕様書.md
