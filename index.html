@@ -58,6 +58,8 @@
         #sex-bar { height: 100%; background: linear-gradient(90deg, #f0f, #ff69b4); width: 0%; }
         #trait-display { color: #ffd700; font-size: 10px; text-align: right; }
         #heart-display { font-size: 15px; letter-spacing: 2px; line-height: 1; text-align: right; }
+        #buff-display { text-align: right; }
+        .buff-chip { display: inline-block; background: rgba(0,0,0,0.75); border: 1px solid #665; border-radius: 8px; padding: 1px 6px; margin: 2px 0 0 4px; font-size: 11px; color: #fd5; }
         #level-display { color: #0ff; font-size: 11px; font-weight: bold; }
 
         #joystick-base { position: absolute; width: 120px; height: 120px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 50%; display: none; pointer-events: none; left: 50%; top: 50%; transform: translate(-50%, -50%); }
@@ -105,12 +107,13 @@
         <div class="status-group">
             <div id="time-display">⏱ 0:00</div>
             <div id="heart-display"></div>
+            <div id="buff-display"></div>
             <div id="boss-hp-bar" style="display:none; width:100%; height:8px; background:#300; border:1px solid #f00; margin-top:5px;"><div id="boss-hp" style="width:100%; height:100%; background:#f00;"></div></div>
         </div>
         <div id="joystick-base"><div id="joystick-stick"></div></div>
         <div id="gesture-hint">引っ張る=移動　タップ=交代　長押し=爆発(♡消費)　止まる=チャージ</div>
         <div id="bottom-controls">
-            <button class="big-btn" onclick="openMissions()">🎯 ミッション</button>
+            <button class="big-btn" onclick="openMenu()">☰ メニュー</button>
             <button class="big-btn" id="ec-btn" onclick="openEC()">🛒 ショップ <span id="ec-btn-money">¥0</span></button>
         </div>
     </div>
@@ -122,10 +125,12 @@
         <div id="ec-list" style="width:100%; display:flex; flex-direction:column; align-items:center; overflow-y:auto;"></div>
         <button onclick="closeEC()" class="main-btn active" style="margin-top:10px; max-width:220px;">閉じて戦闘へ</button>
     </div>
-    <div id="mission-scene" class="overlay-menu">
-        <h2 style="color:#0ff; margin:0 0 12px 0;">🎯 ミッション</h2>
+    <div id="menu-scene" class="overlay-menu">
+        <h2 style="color:#0ff; margin:0 0 12px 0;">☰ メニュー</h2>
         <div id="mission-body" style="font-size:14px; line-height:1.6; margin-bottom:16px;"></div>
-        <button onclick="closeMissions()" class="main-btn active" style="max-width:220px;">閉じる</button>
+        <button onclick="closeMenu()" class="main-btn active" style="max-width:220px;">閉じて戦闘へ</button>
+        <button onclick="menuRetry()" style="background:none; border:1px solid #666; border-radius:20px; color:#aaa; padding:9px 26px; margin-top:16px; font-family:inherit;">🔄 リトライ (同じ編成で最初から)</button>
+        <button onclick="retireRun()" style="background:none; border:1px solid #833; border-radius:20px; color:#c66; padding:9px 26px; margin-top:8px; font-family:inherit;">🏳️ リタイア (ランを終了)</button>
     </div>
 
     <div id="result-scene" class="scene" style="justify-content: center;">
@@ -240,6 +245,15 @@ const CHAR_DEFS = [
       atk:{ type:'zone',      pow:5,  freq:1,   rng:0, zoneLife:3, zoneR:2 }, bDesc:"足元にダメージゾーン2つ" }
 ];
 // メタショップ(ラン間の永続強化)は一旦畳んだ。将来アンロック要素等で復活予定
+// 「一定時間」系バフのHUD表示メタ
+const BUFF_META = {
+    minari: { i:'🎁', n:'アイテム2倍' },
+    bell:   { i:'💪', n:'攻撃UP＆被ゲージ減' },
+    bani:   { i:'💞', n:'被弾も白♡' },
+    yuna:   { i:'💰', n:'撃破で必ず💰' },
+    moko:   { i:'🔋', n:'停止チャージUP' },
+    mayuu:  { i:'✨', n:'コスプレ変身' }
+};
 // 群れ主体 (仕様書§1.2): 弾を撃つのは🐍エリートとボスのみ
 const ENEMY_TYPES = [
     { type:0, icon:'🐺', hp:25, spd:1.9, cool:0, score:100, weight:45, pack:[2,3] },
@@ -447,7 +461,7 @@ function resetRun() {
     }
     document.getElementById('boss-hp-bar').style.display = 'none';
     document.getElementById('ec-scene').style.display = 'none';
-    document.getElementById('mission-scene').style.display = 'none';
+    document.getElementById('menu-scene').style.display = 'none';
     updateMemberUI();
 }
 
@@ -553,6 +567,11 @@ function doSwitch(i) {
         pushText("置き土産！CTごとに爆発を続ける", "#ff6", 45, -85);
         missionEvent('maxswitch');
     }
+    // 置き土産中のキャラに切り替えたら、その置き土産は強制終了
+    const inId = party[i].id;
+    const before = devices.length;
+    devices = devices.filter(d => d.id !== inId);
+    if(devices.length < before) pushText("置き土産を回収した", "#888", 35, -70);
     activeIdx = i;
     switchTimer = CONFIG.SWITCH_COOLDOWN;
     updateMemberUI();
@@ -758,8 +777,8 @@ function updateDeliveries() {
         pushText("📦 届いた！拾いに行け", "#0ff", 40, -90);
     }
 }
-// ---------------- ミッション (メニューで開く) ----------------
-function openMissions() {
+// ---------------- メニュー (ミッション表示 + リトライ/リタイア) ----------------
+function openMenu() {
     if(isOver || paused) return;
     paused = true;
     moveTouchId = null; gestures.clear(); joyEnd();
@@ -767,11 +786,20 @@ function openMissions() {
     const head = boss ? `BOSSを倒せ！` : `NEXT BOSS ${killCount}/${norma}`;
     document.getElementById('mission-body').innerHTML = `<div style="color:#f66; margin-bottom:10px;">${head}</div>` +
         missions.map(m => `<div style="margin:8px 0;">・${m.def.txt(m.n)}　<b>${Math.min(m.prog, m.n)}/${m.n}</b></div>`).join('');
-    document.getElementById('mission-scene').style.display = 'flex';
+    document.getElementById('menu-scene').style.display = 'flex';
 }
-function closeMissions() {
-    document.getElementById('mission-scene').style.display = 'none';
+function closeMenu() {
+    document.getElementById('menu-scene').style.display = 'none';
     paused = false;
+}
+function menuRetry() {
+    document.getElementById('menu-scene').style.display = 'none';
+    retryRun();
+}
+function retireRun() {
+    document.getElementById('menu-scene').style.display = 'none';
+    paused = false;
+    endGame();
 }
 
 // ---------------- スコア ----------------
@@ -1205,7 +1233,15 @@ function draw() {
     });
     sweepFx = sweepFx.filter(s => s.l > 0);
     ctx.fillStyle = "#eee"; ctx.font = "30px Arial";
-    enemies.forEach(en => ctx.fillText(en.icon, en.x-worldX+cx, en.y-worldY+cy+10));
+    enemies.forEach(en => {
+        const ex = en.x-worldX+cx, ey = en.y-worldY+cy;
+        ctx.fillText(en.icon, ex, ey+10);
+        if(en.slowT > 0 || en.poisonT > 0) {   // 敵デバフの可視化 (🐌=スロー / ☠=毒)
+            ctx.font = "12px Arial";
+            ctx.fillText((en.slowT > 0 ? '🐌' : '') + (en.poisonT > 0 ? '☠' : ''), ex, ey - 22);
+            ctx.font = "30px Arial";
+        }
+    });
     if(boss) { ctx.font = "80px Arial"; ctx.fillText("👹", boss.x-worldX+cx, boss.y-worldY+cy+30); }
     ctx.fillStyle = "#ff3333";
     enemyBullets.forEach(eb => { ctx.beginPath(); ctx.arc(eb.x-worldX+cx, eb.y-worldY+cy, eb.size, 0, 7); ctx.fill(); });
@@ -1215,10 +1251,14 @@ function draw() {
         const dx = d.x - worldX + cx, dy = d.y - worldY + cy;
         ctx.globalAlpha = 0.55; ctx.font = "40px Arial";
         ctx.fillText(d.e, dx, dy + 12);
-        ctx.globalAlpha = 0.3 + 0.3 * Math.abs(Math.sin(frame * 0.2));
-        ctx.strokeStyle = "#fa0"; ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.25;
+        ctx.strokeStyle = "#fa0"; ctx.lineWidth = 3;
         ctx.beginPath(); ctx.arc(dx, dy, 30, 0, 7); ctx.stroke();
-        ctx.globalAlpha = 0.9; ctx.font = "12px sans-serif"; ctx.fillStyle = "#ff6";
+        // 次の爆発までのCTアーク
+        ctx.globalAlpha = 0.9; ctx.strokeStyle = "#ff6";
+        const dprog = Math.max(0, Math.min(1, 1 - d.timer / CONFIG.BURST_COOLDOWN));
+        ctx.beginPath(); ctx.arc(dx, dy, 30, -Math.PI/2, -Math.PI/2 + dprog * Math.PI * 2); ctx.stroke();
+        ctx.font = "12px sans-serif"; ctx.fillStyle = "#ff6";
         ctx.fillText(`♥×${d.left}`, dx, dy + 32);
         ctx.globalAlpha = 1;
     });
@@ -1241,11 +1281,19 @@ function draw() {
     ctx.globalAlpha = standing ? (0.75 + 0.25 * Math.sin(frame * 0.25)) : 0.9;
     ctx.beginPath(); ctx.arc(cx, cy, 50, -Math.PI/2, -Math.PI/2 + (p.sex/100) * Math.PI * 2); ctx.stroke();
     ctx.globalAlpha = 1;
-    // 白♡を持っていると外側に発光 (黄=爆発OK / 灰=クールタイム中)
+    // 白♡持ちの外周リング: CT中=回復アークで残り時間を可視化 / 準備完了=黄色の脈動
     if(p.white > 0) {
-        ctx.strokeStyle = burstCd <= 0 ? "#ff0" : "#666"; ctx.lineWidth = 3;
-        ctx.globalAlpha = 0.4 + Math.sin(frame * 0.3) * 0.25;
-        ctx.beginPath(); ctx.arc(cx, cy, 61 + Math.sin(frame * 0.15) * 4, 0, 7); ctx.stroke();
+        if(burstCd > 0) {
+            ctx.strokeStyle = "#555"; ctx.lineWidth = 3; ctx.globalAlpha = 0.5;
+            ctx.beginPath(); ctx.arc(cx, cy, 61, 0, 7); ctx.stroke();
+            ctx.strokeStyle = "#fd5"; ctx.globalAlpha = 0.9;
+            const prog = 1 - burstCd / CONFIG.BURST_COOLDOWN;
+            ctx.beginPath(); ctx.arc(cx, cy, 61, -Math.PI/2, -Math.PI/2 + prog * Math.PI * 2); ctx.stroke();
+        } else {
+            ctx.strokeStyle = "#ff0"; ctx.lineWidth = 3;
+            ctx.globalAlpha = 0.4 + Math.sin(frame * 0.3) * 0.25;
+            ctx.beginPath(); ctx.arc(cx, cy, 61 + Math.sin(frame * 0.15) * 4, 0, 7); ctx.stroke();
+        }
         ctx.globalAlpha = 1;
     }
     if(invulnTimer <= 0 || frame % 10 < 5) {
@@ -1292,6 +1340,11 @@ function updateHUD() {
         hd += `<span style="color:${col}">♥</span>`;
     }
     document.getElementById('heart-display').innerHTML = hd;
+    // バフ/CTのアイコンチップ (💥=爆発CT残り)
+    let bd = '';
+    if(burstCd > 0) bd += `<span class="buff-chip">💥${Math.ceil(burstCd / 60)}s</span>`;
+    for(const k in buffs) if(buffs[k] > 0) bd += `<span class="buff-chip" title="${BUFF_META[k].n}">${BUFF_META[k].i}${Math.ceil(buffs[k] / 60)}s</span>`;
+    document.getElementById('buff-display').innerHTML = bd;
     document.getElementById('ec-btn-money').innerText = `¥${sessionMoney.toLocaleString()}`;
     const cheapest = Math.min(...ITEM_DEFS.filter(it => !it.cond || it.cond()).map(ecPrice));
     document.getElementById('ec-btn').classList.toggle('ready-glow', sessionMoney >= cheapest);
@@ -1337,7 +1390,7 @@ function endGame() {
     isOver = true; inGame = false; paused = false;
     moveTouchId = null; gestures.clear(); joyEnd();
     document.getElementById('ec-scene').style.display = 'none';
-    document.getElementById('mission-scene').style.display = 'none';
+    document.getElementById('menu-scene').style.display = 'none';
     const prevBest = saveData.bestScores.length ? saveData.bestScores[0].score : 0;
     const isRecord = sessionScore > prevBest;
     saveData.bestScores.push({ score: sessionScore, date: new Date().toISOString().slice(0, 10), party: party.map(m => m.id) });
