@@ -188,9 +188,11 @@ const CONFIG = {
     // 絶頂爆発 (MAX交代)
     BURST_RADIUS: 300, BURST_DMG: 150,   // ダメージは×atk
     BURST_SCORE: 1000, BURST_INVULN: 30,
-    INHERIT_TIME: 900,         // 特性継承 15秒
-    // 少数精鋭ボーナス (空きスロット1つあたり)
-    SOLO_ATK: 0.12, SOLO_SPD: 0.08, SOLO_MULT: 0.25,
+    // 編成人数別の威力倍率 (1人=×4 → 4人=×1。少人数ほど強い)
+    PARTY_ATK: [4, 3, 2, 1],
+    RANGE_UNIT: 110,               // 射程1 ≈ 110px (マユゥの射程3=約330px基準)
+    BUFF_TIME: 600,                // 「一定時間」系爆発の持続 (10秒)
+    BURST_KNOCK_R: 220, BURST_KNOCK: 70,   // 爆発共通の小ノックバック (緊急脱出)
     // レベルアップ
     LEVEL_BASE: 1500, LEVEL_GROWTH: 1.5,
     // スコア
@@ -202,32 +204,40 @@ const CONFIG = {
     HEART_MAX_DEFAULT: 5,          // ♡上限 (キャラで上書き)
     HEART_SLOW_PER: 0.15,          // ハート1つあたり移動-15% (1個目から重い)
     HEART_SLOW_MIN: 0.25,          // 鈍足の下限 (25%まで)
-    CHARGE_PER_HEART: 0.10,        // (雪だるま) 白♡1つでチャージ速度+10%
-    BURST_CHARGE_BUFF: 300,        // 爆発後チャージ加速の持続F
-    BURST_CHARGE_BUFF_MUL: 1.6,    // 爆発後チャージ倍率
     BURST_COOLDOWN: 900,           // 爆発クールタイム (15秒に1回。置き土産の爆発間隔も同じ)
     DEVICE_FIRST_DELAY: 60,        // 置き土産の初弾までのF
     HOMING_TURN: 0.09              // 追尾Lvあたりの旋回力
 };
 
-// ---------------- データ定義 ----------------
-// tr: 特性 (2キャラで1特性を共有)。t: 固有弾ラベル
-const TRAITS = {
-    shun: { n:"俊敏", c:"#5cf", desc:"移動速度+25%" },
-    gou:  { n:"剛力", c:"#f96", desc:"弾の威力+40%" },
-    ren:  { n:"連射", c:"#fd5", desc:"攻撃間隔-25%" },
-    kyu:  { n:"吸収", c:"#a7f", desc:"敵撃破でゲージ-2" },
-    kin:  { n:"金運", c:"#fc3", desc:"ドロップ率UP・磁石" },
-    kou:  { n:"高揚", c:"#f6a", desc:"スコア倍率+0.2" }
-};
+// ---------------- データ定義 (しゅがけマッチ設計シート gid=1513096584 準拠) ----------------
+// atk: { type, pow(威力: マユゥ10基準), freq(発/秒), rng(射程: 1≈110px), pierce, bounce, zoneLife/zoneR }
+// pas: 常時パッシブ / onHit: 攻撃ヒット時の付与効果 / bDesc: 爆発(裏の顔)の説明
+// ※移動速度(spd)はシート未定義のため暫定値。ヒロイベオは「攻撃しない」だが人数倍率と噛ませるため豆鉄砲(威力2)を暫定付与
 const CHAR_DEFS = [
-    { id:0, n:"子", e:"🐭", spd:5.0, cool:30, t:"速射", tr:"shun" }, { id:1, n:"丑", e:"🐮", spd:3.0, cool:60, t:"剛弾", tr:"gou" },
-    { id:2, n:"寅", e:"🐯", spd:4.5, cool:25, t:"2WAY", tr:"ren" }, { id:3, n:"卯", e:"🐰", spd:6.0, cool:35, t:"俊足", tr:"shun" },
-    { id:4, n:"辰", e:"🐲", spd:4.0, cool:50, t:"-", tr:"kin" }, { id:5, n:"巳", e:"🐍", spd:4.5, cool:28, t:"-", tr:"kyu" },
-    { id:6, n:"午", e:"🐴", spd:5.5, cool:30, t:"二丁", tr:"kou" }, { id:7, n:"未", e:"🐏", spd:3.5, cool:45, t:"-", tr:"kyu" },
-    { id:8, n:"申", sName:"マユゥ", e:"🐵", spd:5.2, cool:25, t:"ガラクタ", tr:"kin",
-      heartMax:7, chargeAccel:true, rangeMul:0.6, burstType:'attack', switchType:'device' }, { id:9, n:"酉", e:"🐔", spd:5.0, cool:28, t:"三連", tr:"ren" },
-    { id:10, n:"戌", e:"🐶", spd:4.8, cool:30, t:"-", tr:"kou" }, { id:11, n:"亥", e:"🐗", spd:4.2, cool:40, t:"-", tr:"gou" }
+    { id:0,  n:"子", cn:"ミナリ",     e:"🐭", spd:5.0, heartMax:5, pas:'pickup',
+      atk:{ type:'fanRandom', pow:3,  freq:2,   rng:3 }, bDesc:"障害物を設置＋アイテム効果2倍" },
+    { id:1,  n:"丑", cn:"ベルペット", e:"🐮", spd:3.0, heartMax:5, pas:'whiteGuard',
+      atk:{ type:'sweep',     pow:10, freq:1,   rng:2 }, bDesc:"攻撃力UP＋被ゲージ減" },
+    { id:2,  n:"寅", cn:"ラコ",       e:"🐯", spd:4.5, heartMax:5, onHit:'slow',
+      atk:{ type:'sweep',     pow:5,  freq:1,   rng:1 }, bDesc:"スローエリアを設置" },
+    { id:3,  n:"卯", cn:"バーニ",     e:"🐰", spd:6.0, heartMax:5, pas:'contactGuard',
+      atk:{ type:'aura',      pow:5,  freq:1,   rng:2, pierce:true }, bDesc:"被弾でも白♡になる" },
+    { id:4,  n:"辰", cn:"リウ",       e:"🐲", spd:4.0, heartMax:5, pas:'shopCharge',
+      atk:{ type:'line',      pow:10, freq:0.5, rng:3, pierce:true }, bDesc:"周囲に中ダメージ" },
+    { id:5,  n:"巳", cn:"アウネ",     e:"🐍", spd:4.5, heartMax:5, onHit:'poison',
+      atk:{ type:'line',      pow:3,  freq:2,   rng:2 }, bDesc:"毒沼を設置" },
+    { id:6,  n:"午", cn:"ヒロイベオ", e:"🐴", spd:5.5, heartMax:5,
+      atk:{ type:'line',      pow:2,  freq:1,   rng:2 }, bDesc:"ランダムな味方の爆発を2回発動" },
+    { id:7,  n:"未", cn:"ぱふ先生",   e:"🐏", spd:3.5, heartMax:5, pas:'contactWeak',
+      atk:{ type:'fanRandom', pow:5,  freq:1,   rng:3, bounce:1 }, bDesc:"味方の黒♡を白♡に変換" },
+    { id:8,  n:"申", cn:"マユゥ",     e:"🐵", spd:5.2, heartMax:7,
+      atk:{ type:'line',      pow:10, freq:1,   rng:3 }, bDesc:"コスプレ変身(チャージ加速・移動中もチャージ)" },
+    { id:9,  n:"酉", cn:"ユゥナリナ", e:"🐔", spd:5.0, heartMax:5, pas:'whiteRange',
+      atk:{ type:'boomerang', pow:10, freq:1,   rng:2, pierce:true }, bDesc:"一定時間、撃破で必ず💰" },
+    { id:10, n:"戌", cn:"モコクン",   e:"🐶", spd:4.8, heartMax:5, pas:'moveCharge',
+      atk:{ type:'line',      pow:12, freq:1,   rng:1 }, bDesc:"停止チャージ大幅UP" },
+    { id:11, n:"亥", cn:"瑞珠",       e:"🐗", spd:4.2, heartMax:5, pas:'blackPower',
+      atk:{ type:'zone',      pow:5,  freq:1,   rng:0, zoneLife:3, zoneR:2 }, bDesc:"足元にダメージゾーン2つ" }
 ];
 // メタショップ(ラン間の永続強化)は一旦畳んだ。将来アンロック要素等で復活予定
 // 群れ主体 (仕様書§1.2): 弾を撃つのは🐍エリートとボスのみ
@@ -309,10 +319,9 @@ function initSetupGrid() {
     grid.innerHTML = '';
     CHAR_DEFS.forEach((c, i) => {
         const card = document.createElement('div'); card.className = 'char-card';
-        const tr = TRAITS[c.tr];
         card.innerHTML = `<div style="font-size:18px">${c.e}</div>` +
-            `<span class="trait-tag" style="color:${tr.c}">${tr.n}</span>` +
-            `<div style="font-size:8px; color:#777;">${c.t}</div>`;
+            `<span class="trait-tag" style="color:#fd5">${c.cn}</span>` +
+            `<div style="font-size:8px; color:#777;">♡${c.heartMax}</div>`;
         card.onclick = () => {
             if(selectedIndices.includes(i)) selectedIndices = selectedIndices.filter(id => id !== i);
             else if(selectedIndices.length < 4) selectedIndices.push(i);
@@ -331,13 +340,12 @@ function updateSetupUI() {
         if(selectedIndices[i] !== undefined) { s.innerText = CHAR_DEFS[selectedIndices[i]].e; s.classList.add('filled'); }
         else { s.innerText = ''; s.classList.remove('filled'); }
     }
-    // 少数精鋭ボーナス表示
+    // 人数別の威力倍率表示 (1人=×4 → 4人=×1)
     const bonus = document.getElementById('party-bonus');
-    const empty = 4 - selectedIndices.length;
-    if(selectedIndices.length > 0 && empty > 0) {
-        bonus.innerText = `少数精鋭ボーナス: 威力+${empty*12}% 移動+${empty*8}% スコア倍率+${(empty*CONFIG.SOLO_MULT).toFixed(2)}`;
-    } else if(selectedIndices.length === 4) {
-        bonus.innerText = "フル編成: 継承シナジー＆残機で安定";
+    const n = selectedIndices.length;
+    if(n > 0) {
+        const last = CHAR_DEFS[selectedIndices[n - 1]];
+        bonus.innerText = `威力倍率 ×${CONFIG.PARTY_ATK[n - 1]}（少人数ほど強い）｜${last.cn}: ${last.bDesc}`;
     } else bonus.innerText = "";
     const btn = document.getElementById('start-btn');
     if(selectedIndices.length > 0) { btn.classList.add('active'); btn.innerText = "出撃開始！"; }
@@ -381,14 +389,13 @@ let enemies = [], props = [], bullets = [], enemyBullets = [], drops = [], float
 let killCount = 0, propCount = 0, sessionMoney = 0;
 let sessionScore = 0, maxMult = 1, bossKills = 0, ravagedThisCycle = false;
 let bloodTimer = 0, invulnTimer = 0, spawnTimer = 0, switchTimer = 0;
-let pendingShots = [];
 let burstFx = null;
 let devices = [], burstCd = 0, keyBurstHeld = false;
+let zones = [], sweepFx = [], buffs = {}, partyMul = 1, enemyUid = 1;
 let boss = null;
 let knockVec = {x:0, y:0};
 let deliveries = [], ecBought = {};
 let runMods = null;
-let soloAtk = 1, soloSpd = 1, soloMult = 0;
 let missions = [];
 let missionDoneCount = {};
 
@@ -400,22 +407,8 @@ function fitCanvas() { canvas.width = window.innerWidth; canvas.height = window.
 
 function tryStart() {
     if(selectedIndices.length === 0) return;
-    party = selectedIndices.map(i => ({
-        ...CHAR_DEFS[i], sex: 0, dead: false, stun: 0,
-        white: 0, black: 0,
-        heartMax: CHAR_DEFS[i].heartMax || CONFIG.HEART_MAX_DEFAULT,
-        chargeBuffTimer: 0,
-        inhTrait: null, inhTimer: 0,
-        atk: 1.0,
-        spd: CHAR_DEFS[i].spd,
-        cool: CHAR_DEFS[i].cool,
-        range: 1.0 * (CHAR_DEFS[i].rangeMul || 1)
-    }));
-    // 少数精鋭ボーナス
-    const empty = 4 - party.length;
-    soloAtk = 1 + empty * CONFIG.SOLO_ATK;
-    soloSpd = 1 + empty * CONFIG.SOLO_SPD;
-    soloMult = empty * CONFIG.SOLO_MULT;
+    party = selectedIndices.map(i => ({ ...CHAR_DEFS[i], sex: 0, dead: false, stun: 0, white: 0, black: 0 }));
+    partyMul = CONFIG.PARTY_ATK[party.length - 1];   // 1人=×4 → 4人=×1
     stopPreview();
     resetRun();
     showScene('game');
@@ -433,11 +426,13 @@ function resetRun() {
     frame = 0; sessionMoney = 0; killCount = 0; propCount = 0;
     sessionScore = 0; maxMult = 1; bossKills = 0; ravagedThisCycle = false;
     bloodTimer = 0; invulnTimer = 0; spawnTimer = CONFIG.ENEMY_SPAWN_INTERVAL; switchTimer = 0;
-    pendingShots = []; burstFx = null;
+    burstFx = null;
     boss = null; isOver = false; inGame = true; paused = false;
     deliveries = []; ecBought = {};
     runMods = { atkMul:1, coolMul:1, rangeMul:1, spdMul:1, pickup:0, burstMul:1, chargeMul:1, guardMul:1, sizeMul:1, bulletSpdMul:1, homing:0 };
     devices = []; burstCd = 0; keyBurstHeld = false;
+    zones = []; sweepFx = []; enemyUid = 1;
+    buffs = { minari:0, bell:0, bani:0, yuna:0, moko:0, mayuu:0 };
     missions = []; missionDoneCount = {};
     while(missions.length < 3) addMission();
     activeIdx = 0; knockVec = {x:0, y:0}; moveVec = {x:0, y:0}; lastAim = {x:1, y:0};
@@ -524,10 +519,20 @@ window.addEventListener('keydown', e => {
 });
 window.addEventListener('keyup', e => { if(e.code === 'KeyX') keyBurstHeld = false; });
 
-// ---------------- 特性 ----------------
-function hasTrait(p, key) { return p.tr === key || (p.inhTimer > 0 && p.inhTrait === key); }
+// ---------------- 実効値 ----------------
+function effDmg(p) {
+    let d = p.atk.pow * runMods.atkMul * partyMul;
+    if(p.pas === 'blackPower') d *= 1 + p.black * 0.15;   // 瑞珠: 黒♡が多いほど攻撃力UP
+    if(buffs.bell > 0) d *= 1.5;                           // ベルペット爆発: 攻撃力UP
+    return d;
+}
+function effRange(p) {
+    let r = runMods.rangeMul;
+    if(p.pas === 'whiteRange') r *= 1 + p.white * 0.08;    // ユゥナリナ: 白♡が多いほど射程UP
+    return r;
+}
 
-// ---------------- 交代・爆発・置き土産デバイス ----------------
+// ---------------- 交代 = 置き土産 (白♡を使い切るまでCTごとに自分の爆発を繰り返す) ----------------
 function switchNext() {
     if(isOver || switchTimer > 0) return;
     if(party.filter(m => !m.dead).length < 2) { pushText("交代できない...", "#888", 25); return; }
@@ -542,58 +547,100 @@ function switchMember(i) {   // ボタン直接指名
 }
 function doSwitch(i) {
     const out = party[activeIdx];
-    // 白♡を抱えたまま交代すると得: キャラ個性で「継承」か「置き土産」
     if(!out.dead && out.white > 0) {
-        if(out.switchType === 'inherit') {
-            const inM = party[i];
-            inM.inhTrait = out.tr;
-            inM.inhTimer = CONFIG.INHERIT_TIME + out.white * 60;
-            pushText(`特性継承: ${TRAITS[out.tr].n}！`, TRAITS[out.tr].c, 55, -85);
-        } else {   // 'device' = 置き土産 (その場に残って白♡を撃ち尽くす)
-            spawnDevice(out);
-            pushText("置き土産！自動で撃ち続ける", "#ff6", 45, -85);
-        }
+        devices.push({ id: out.id, e: out.e, x: worldX, y: worldY, left: out.white, timer: CONFIG.DEVICE_FIRST_DELAY });
         out.white = 0; out.stun = 30;
+        pushText("置き土産！CTごとに爆発を続ける", "#ff6", 45, -85);
         missionEvent('maxswitch');
     }
     activeIdx = i;
     switchTimer = CONFIG.SWITCH_COOLDOWN;
     updateMemberUI();
 }
-function spawnDevice(p) {
-    devices.push({
-        e: p.e, x: worldX, y: worldY,
-        left: p.white, type: p.burstType || 'attack',
-        dmg: CONFIG.BURST_DMG * effAtk(p),
-        radius: CONFIG.BURST_RADIUS * runMods.burstMul,
-        timer: CONFIG.DEVICE_FIRST_DELAY
-    });
-}
 function updateDevices() {
     devices.forEach(d => {
         if(--d.timer > 0) return;
-        d.timer = CONFIG.BURST_COOLDOWN;   // 手動爆発と同じクールタイムを参照
-        doBurstAt(d.x, d.y, d.dmg, d.radius, "#fa0");   // 攻撃型: その場で範囲攻撃
+        d.timer = CONFIG.BURST_COOLDOWN;   // 手動爆発と同じCTを参照
+        burstCommon(d.x, d.y, false);
+        executeBurst(d.id, d.x, d.y);
         if(--d.left <= 0) d.dead = true;
     });
     devices = devices.filter(d => !d.dead);
 }
-// 長押しで発動する爆発 (白♡1消費)。クールタイム制 (15秒に1回)。使うほどチャージ加速=連続絶頂
+
+// ---------------- 爆発 (裏の顔) ----------------
+// 長押しで白♡1消費。共通効果=小ノックバック+短い無敵(緊急脱出)。個性は executeBurst
 function tryBurst(p) {
     if(isOver || p.dead || p.stun > 0 || p.white <= 0) return;
     if(burstCd > 0) { if(frame % 60 === 0) pushText(`爆発まであと${Math.ceil(burstCd / 60)}秒`, "#888", 30); return; }
     p.white--;
     burstCd = CONFIG.BURST_COOLDOWN;
-    p.chargeBuffTimer = CONFIG.BURST_CHARGE_BUFF;
-    doBurstAt(worldX, worldY, CONFIG.BURST_DMG * effAtk(p), CONFIG.BURST_RADIUS * runMods.burstMul, "#f0f");
+    burstCommon(worldX, worldY, true);
+    executeBurst(p.id, worldX, worldY);
     addScore(CONFIG.BURST_SCORE);
     updateMemberUI();
 }
-function doBurstAt(x, y, dmg, radius, color) {
-    enemies.forEach(en => { if(Math.hypot(en.x - x, en.y - y) < radius) en.hp -= dmg; });
-    if(boss && Math.hypot(boss.x - x, boss.y - y) < radius) boss.hp -= dmg;
-    enemyBullets.forEach(eb => { if(Math.hypot(eb.x - x, eb.y - y) < radius) eb.dead = true; });
-    burstFx = { x, y, r: radius, l: 20, maxL: 20, c: color };
+function burstCommon(x, y, self) {
+    enemies.forEach(en => {
+        const d = Math.hypot(en.x - x, en.y - y) || 1;
+        if(d < CONFIG.BURST_KNOCK_R) { en.x += (en.x - x) / d * CONFIG.BURST_KNOCK; en.y += (en.y - y) / d * CONFIG.BURST_KNOCK; }
+    });
+    if(self) invulnTimer = Math.max(invulnTimer, CONFIG.BURST_INVULN);
+    burstFx = { x, y, r: CONFIG.BURST_KNOCK_R, l: 20, maxL: 20, c: self ? "#f0f" : "#fa0" };
+}
+// キャラ固有の爆発 (裏の顔)。バフ系はグローバル=操作中のキャラに乗る。x,y=発生源(本人 or 置き土産)
+function executeBurst(id, x, y, depth = 0) {
+    const B = CONFIG.BUFF_TIME, M = CONFIG.WALL_MARGIN;
+    switch(id) {
+        case 0:   // ミナリ: 障害物を設置 + アイテム効果2倍
+            for(let k = 0; k < 3; k++) {
+                const a = Math.PI * 2 * k / 3 + Math.random();
+                props.push({ x: Math.max(M, Math.min(CONFIG.STAGE_W - M, x + Math.cos(a) * 110)),
+                             y: Math.max(M, Math.min(CONFIG.STAGE_H - M, y + Math.sin(a) * 110)), t: '🪨' });
+            }
+            buffs.minari = B; pushText("バリケード！アイテム効果2倍", "#fc3", 50, -70);
+            break;
+        case 1: buffs.bell = B; pushText("覚醒！攻撃UP＆被ゲージ減", "#f96", 50, -70); break;   // ベルペット
+        case 2: zones.push({ x, y, r: 250, life: 300, type: 'slow' }); pushText("スローエリア設置", "#08f", 50, -70); break;   // ラコ
+        case 3: buffs.bani = B; pushText("興奮状態！被弾も白♡になる", "#f6a", 50, -70); break;   // バーニ
+        case 4: {   // リウ: 周囲に中ダメージ
+            const dmg = 60 * runMods.atkMul * partyMul;
+            enemies.forEach(en => { if(Math.hypot(en.x - x, en.y - y) < 300) en.hp -= dmg; });
+            if(boss && Math.hypot(boss.x - x, boss.y - y) < 300) boss.hp -= dmg;
+            pushText("女王の威圧！", "#fd5", 50, -70);
+            break;
+        }
+        case 5: zones.push({ x, y, r: 250, life: 300, type: 'poison' }); pushText("毒沼を設置", "#3f6", 50, -70); break;   // アウネ
+        case 6: {   // ヒロイベオ: ランダムな味方の爆発を2回発動
+            if(depth > 2) break;   // 連鎖の暴走防止
+            const others = party.filter(m => !m.dead && m.id !== 6);
+            if(!others.length) { pushText("……(誰もいない)", "#888", 40, -70); break; }
+            for(let k = 0; k < 2; k++) {
+                const m = others[Math.floor(Math.random() * others.length)];
+                pushText(`${m.e} の力を引き出した`, "#eee", 45, -70 - k * 20);
+                executeBurst(m.id, x, y, depth + 1);
+            }
+            break;
+        }
+        case 7: {   // ぱふ先生: ランダムな味方の黒♡→白♡
+            const cand = party.filter(m => !m.dead && m.black > 0);
+            if(cand.length) {
+                const m = cand[Math.floor(Math.random() * cand.length)];
+                m.black--; m.white++;
+                pushText(`${m.e} の黒♡が白♡に浄化された`, "#fff", 55, -70);
+            } else pushText("浄化する黒♡がない", "#888", 40, -70);
+            break;
+        }
+        case 8: buffs.mayuu = B; pushText("コスプレ変身！", "#f0f", 55, -70); break;   // マユゥ
+        case 9: buffs.yuna = B; pushText("大サービス！撃破で必ず💰", "#ffd700", 50, -70); break;   // ユゥナリナ
+        case 10: buffs.moko = B; pushText("ラブ全開！停止チャージ大UP", "#f6a", 50, -70); break;   // モコクン
+        case 11:   // 瑞珠: 足元にダメージゾーン2つ
+            zones.push({ x, y, r: 220, life: 300, type: 'damage', pow: 5 * runMods.atkMul * partyMul });
+            zones.push({ x: x + 120, y: y + (Math.random() - 0.5) * 160, r: 220, life: 300, type: 'damage', pow: 5 * runMods.atkMul * partyMul });
+            pushText("泥エステ開店", "#fa0", 50, -70);
+            break;
+    }
+    updateMemberUI();
 }
 
 // ---------------- 快感ゲージ → 2色ハート ----------------
@@ -603,7 +650,12 @@ function addSex(p, amount, fromEnemy) {
     if(isOver || p.dead) return;
     if(fromEnemy) {
         if(invulnTimer > 0) return;
-        amount *= (1 - saveData.upgrades.resist * CONFIG.RESIST_GUARD) * runMods.guardMul;
+        let g = runMods.guardMul;
+        if(p.pas === 'whiteGuard') g *= Math.max(0.4, 1 - p.white * 0.10);   // ベルペット: 白♡が多いほど被ゲージ減
+        if(p.pas === 'contactGuard') g *= 0.6;                                // バーニ: 接触の被ゲージが少ない
+        if(p.pas === 'contactWeak') g *= 1.5;                                 // ぱふ先生: 接触の被ゲージが多い(弱点)
+        amount *= g;
+        if(buffs.bani > 0 && p === party[activeIdx]) fromEnemy = false;       // バーニ爆発中: 被弾も白♡側に貯まる
     }
     p.sex += amount;
     if(p.sex >= 100) { p.sex = 0; gainHeart(p, fromEnemy); }
@@ -684,6 +736,8 @@ function buyEC(id) {
     ecBought[id] = (ecBought[id] || 0) + 1;
     deliveries.push({ id, timer: CONFIG.DELIVERY_DELAY });
     pushText("注文完了！まもなく届く📦", "#0ff", 40, -80);
+    const ap = party[activeIdx];
+    if(ap && !ap.dead && ap.pas === 'shopCharge') { addSex(ap, 15, false); pushText("お買い物で興奮…♥", "#f6a", 35, -60); }   // リウ
     renderEC();
 }
 function closeEC() {
@@ -723,14 +777,13 @@ function closeMissions() {
 // ---------------- スコア ----------------
 function riskMult() {
     const p = party[activeIdx];
-    return 1 + (p.white + p.black) * 0.15 + p.sex / 200 + (bloodTimer > 0 ? CONFIG.BLOOD_SCORE_BONUS : 0) + soloMult + (hasTrait(p, 'kou') ? 0.2 : 0);
+    return 1 + (p.white + p.black) * 0.15 + p.sex / 200 + (bloodTimer > 0 ? CONFIG.BLOOD_SCORE_BONUS : 0);
 }
 function addScore(base) { sessionScore += Math.round(base * riskMult()); }
 
-// ---------------- 実効ステータス (特性・宅配・少数精鋭を合成) ----------------
-function effAtk(p) { return p.atk * runMods.atkMul * soloAtk * (hasTrait(p, 'gou') ? 1.4 : 1); }
-function effSpd(p) { return p.spd * runMods.spdMul * soloSpd * (hasTrait(p, 'shun') ? 1.25 : 1); }
-function effPickup(p) { return CONFIG.PICKUP_RADIUS + runMods.pickup + (hasTrait(p, 'kin') ? 20 : 0); }
+// ---------------- 実効ステータス ----------------
+function effSpd(p) { return p.spd * runMods.spdMul; }
+function effPickup(p) { return CONFIG.PICKUP_RADIUS + runMods.pickup + (p.pas === 'pickup' ? 60 : 0); }   // ミナリ: 回収範囲が広い
 
 // ---------------- メインループ ----------------
 let rafId = 0, lastTime = 0, acc = 0;
@@ -754,27 +807,28 @@ function update() {
     const p = party[activeIdx];
     party.forEach((m, i) => {
         if(m.stun > 0) m.stun--;
-        if(m.inhTimer > 0) m.inhTimer--;
-        if(m.chargeBuffTimer > 0) m.chargeBuffTimer--;
         if(i !== activeIdx && !m.dead && m.sex > 0) m.sex = Math.max(0, m.sex - CONFIG.BENCH_SEX_REGEN);
     });
+    for(const k in buffs) if(buffs[k] > 0) buffs[k]--;
     if(bloodTimer > 0) bloodTimer--;
     if(invulnTimer > 0) invulnTimer--;
     if(switchTimer > 0) switchTimer--;
     if(burstCd > 0) burstCd--;
     if(burstFx && --burstFx.l <= 0) burstFx = null;
-    updatePendingShots();
     updateDevices();
+    updateZones();
     maxMult = Math.max(maxMult, riskMult());
-    // 長押し中=爆発(白♡消費) / 停止=チャージ。マユゥは白♡が多い&爆発直後ほどチャージ加速(雪だるま)
+    // 長押し中=爆発(白♡消費) / 停止=チャージ
     const holdingBurst = keyBurstHeld || [...gestures.entries()].some(([id, g]) => id !== moveTouchId && !g.moved && Date.now() - g.t >= CONFIG.TAP_MS);
     if(holdingBurst) tryBurst(p);
     const standing = moveVec.x === 0 && moveVec.y === 0 && Math.hypot(knockVec.x, knockVec.y) < 0.5;
-    if(standing) {
-        let rate = CONFIG.STAND_CHARGE * runMods.chargeMul;
-        if(p.chargeAccel) rate *= (1 + p.white * CONFIG.CHARGE_PER_HEART);
-        if(p.chargeBuffTimer > 0) rate *= CONFIG.BURST_CHARGE_BUFF_MUL;
-        addSex(p, rate, false);
+    {
+        const base = CONFIG.STAND_CHARGE * runMods.chargeMul;
+        let rate = 0;
+        if(standing) rate = base * (buffs.moko > 0 ? 3 : 1);        // モコクン爆発: 停止チャージ大UP
+        else if(p.pas === 'moveCharge') rate = base * 0.5;          // モコクン: 移動中もゲージ上昇
+        if(buffs.mayuu > 0) rate = Math.max(rate, base) * 2;        // コスプレ変身: 加速+移動中もチャージ
+        if(rate > 0) addSex(p, rate, false);
     }
     if(frame % CONFIG.SURVIVAL_TICK === 0) {
         const bonus = CONFIG.SURVIVAL_BASE * (Math.floor(frame / 3600) + 1);
@@ -818,8 +872,9 @@ function updatePlayer(p) {
 
 function updateAttack(p) {
     if(p.stun > 0) return;
-    const renMul = hasTrait(p, 'ren') ? 0.75 : 1;
-    const cool = Math.max(5, Math.floor(p.cool * runMods.coolMul * renMul));
+    const a = p.atk;
+    if(!a.freq) return;
+    const cool = Math.max(5, Math.round(60 / a.freq * runMods.coolMul));
     if(frame % cool !== 0) return;
     // 自動照準: 最寄りの敵を狙う。射程内に敵がいなければ移動向き
     let target = null, best = Infinity;
@@ -830,51 +885,87 @@ function updateAttack(p) {
     });
     let vx = lastAim.x, vy = lastAim.y;
     if(target && best < CONFIG.TARGET_RANGE) { vx = target.x - worldX; vy = target.y - worldY; }
-    // キャラ固有弾 (第1弾: 丑・寅・午・酉)
-    switch(p.id) {
-        case 1:
-            fireBullet(p, vx, vy, { sizeMul: 2, spdMul: 0.7, dmgMul: 2 });
-            break;
-        case 2: {
-            const a = Math.atan2(vy, vx);
-            fireBullet(p, Math.cos(a - 0.15), Math.sin(a - 0.15));
-            fireBullet(p, Math.cos(a + 0.15), Math.sin(a + 0.15));
+    const ang = Math.atan2(vy, vx);
+    const reach = a.rng * CONFIG.RANGE_UNIT * effRange(p);
+    switch(a.type) {
+        case 'line': fireBullet(p, vx, vy); break;
+        case 'fanRandom': {   // 前方扇範囲のランダム方向 (ミナリ・ぱふ先生)
+            const ra = ang + (Math.random() - 0.5) * 1.2;
+            fireBullet(p, Math.cos(ra), Math.sin(ra));
             break;
         }
-        case 6:
-            fireBullet(p, vx, vy);
-            if(moveVec.x !== 0 || moveVec.y !== 0) fireBullet(p, moveVec.x, moveVec.y);
+        case 'boomerang': fireBullet(p, vx, vy, { boomerang: true }); break;   // ユゥナリナ
+        case 'sweep':   // 薙ぎ払い/引っかき (ベルペット・ラコ)
+            sweepFx.push({ ang, r: reach, l: 12 });
+            hitArc(p, ang, reach, 1.05);
             break;
-        case 9:
-            fireBullet(p, vx, vy);
-            pendingShots.push({ delay: 6, p, vx, vy }, { delay: 12, p, vx, vy });
+        case 'aura':   // 360度ダメージゾーン (バーニ)
+            sweepFx.push({ ang: 0, r: reach, l: 12, full: true });
+            hitArc(p, 0, reach, Math.PI + 0.1);
             break;
-        default:
-            fireBullet(p, vx, vy);
+        case 'zone':   // 足元に設置 (瑞珠)
+            zones.push({ x: worldX, y: worldY, r: a.zoneR * CONFIG.RANGE_UNIT * effRange(p), life: a.zoneLife * 60, type: 'damage', pow: effDmg(p) });
+            break;
     }
+}
+function hitArc(p, ang, reach, halfArc) {
+    const dmg = effDmg(p);
+    const scan = boss ? enemies.concat([boss]) : enemies;
+    scan.forEach(en => {
+        const d = Math.hypot(en.x - worldX, en.y - worldY);
+        if(d > reach + 20) return;
+        let da = Math.atan2(en.y - worldY, en.x - worldX) - ang;
+        while(da > Math.PI) da -= Math.PI * 2; while(da < -Math.PI) da += Math.PI * 2;
+        if(Math.abs(da) > halfArc) return;
+        en.hp -= dmg;
+        if(en !== boss) applyOnHit(p, en);
+    });
+}
+function applyOnHit(p, en) {
+    if(p.onHit === 'slow') en.slowT = 120;      // ラコ: 敵スロー
+    if(p.onHit === 'poison') en.poisonT = 180;  // アウネ: スリップダメージ
 }
 
 function fireBullet(p, vx, vy, opts = {}) {
     const d = Math.hypot(vx, vy) || 1;
-    const spd = CONFIG.BULLET_SPEED * (opts.spdMul || 1) * runMods.bulletSpdMul;
-    const range = p.range * runMods.rangeMul;
+    const a = p.atk;
+    const spd = CONFIG.BULLET_SPEED * runMods.bulletSpdMul;
+    const lifeF = Math.max(6, Math.round(a.rng * CONFIG.RANGE_UNIT * effRange(p) / spd));
     bullets.push({
-        x: worldX, y: worldY,
-        vx: vx/d * spd, vy: vy/d * spd,
-        l: CONFIG.BULLET_LIFE * range, size: CONFIG.BULLET_SIZE * range * (opts.sizeMul || 1) * runMods.sizeMul,
-        dmg: 10 * effAtk(p) * (opts.dmgMul || 1)
+        x: worldX, y: worldY, vx: vx/d * spd, vy: vy/d * spd,
+        l: opts.boomerang ? lifeF * 4 : lifeF, out: lifeF,
+        size: CONFIG.BULLET_SIZE * runMods.sizeMul * (0.7 + a.pow * 0.05),
+        dmg: effDmg(p), owner: p,
+        pierce: !!a.pierce, bounce: a.bounce || 0,
+        boomerang: !!opts.boomerang, hit: a.pierce ? [] : null
     });
 }
 
-function updatePendingShots() {
-    pendingShots.forEach(s => { if(--s.delay <= 0) fireBullet(s.p, s.vx, s.vy); });
-    pendingShots = pendingShots.filter(s => s.delay > 0);
+function updateZones() {
+    zones.forEach(z => {
+        z.life--;
+        if(z.type === 'damage' && z.life % 60 === 0) {
+            enemies.forEach(en => { if(Math.hypot(en.x - z.x, en.y - z.y) < z.r) en.hp -= z.pow; });
+            if(boss && Math.hypot(boss.x - z.x, boss.y - z.y) < z.r) boss.hp -= z.pow;
+        }
+        if(z.type === 'poison' && z.life % 20 === 0) {
+            enemies.forEach(en => { if(Math.hypot(en.x - z.x, en.y - z.y) < z.r) en.poisonT = Math.max(en.poisonT || 0, 90); });
+        }
+        if(z.life <= 0) z.dead = true;
+    });
+    zones = zones.filter(z => !z.dead);
 }
 
 function updateBullets() {
     const scan = boss ? [boss] : enemies;
     bullets.forEach(b => {
-        if(runMods.homing > 0 && scan.length) {
+        if(b.boomerang && b.out >= 0 && --b.out < 0) b.hit = [];   // 折り返しで再ヒット可能に
+        if(b.boomerang && b.out < 0) {   // 帰り: プレイヤーの手元へ戻る
+            const dx = worldX - b.x, dy = worldY - b.y, dd = Math.hypot(dx, dy) || 1;
+            if(dd < 24) { b.dead = true; return; }
+            const sp = Math.hypot(b.vx, b.vy);
+            b.vx = dx/dd * sp; b.vy = dy/dd * sp;
+        } else if(runMods.homing > 0 && scan.length) {
             let tx, ty, bd = Infinity;
             scan.forEach(e => { const d = Math.hypot(e.x - b.x, e.y - b.y); if(d < bd) { bd = d; tx = e.x; ty = e.y; } });
             if(tx !== undefined) {
@@ -888,7 +979,7 @@ function updateBullets() {
             }
         }
         b.x += b.vx; b.y += b.vy;
-        if(props.some(pr => Math.abs(b.x - pr.x) < 28 && Math.abs(b.y - pr.y) < 28)) b.dead = true;   // 障害物で遮蔽
+        if(!b.boomerang && props.some(pr => Math.abs(b.x - pr.x) < 28 && Math.abs(b.y - pr.y) < 28)) b.dead = true;   // 障害物で遮蔽
         if(--b.l <= 0) b.dead = true;
     });
 }
@@ -916,11 +1007,11 @@ function spawnEnemies() {
     for(let i = 0; i < count; i++) {
         const a = angle + (Math.random() - 0.5) * 0.6;
         enemies.push({
-            ...type,
+            ...type, uid: enemyUid++,
             x: Math.max(M, Math.min(CONFIG.STAGE_W - M, worldX + Math.cos(a) * (CONFIG.ENEMY_SPAWN_DIST + Math.random() * 80))),
             y: Math.max(M, Math.min(CONFIG.STAGE_H - M, worldY + Math.sin(a) * (CONFIG.ENEMY_SPAWN_DIST + Math.random() * 80))),
             hp: Math.round(type.hp * hpScale), maxHp: Math.round(type.hp * hpScale),
-            phase: Math.floor(Math.random() * 600)
+            phase: Math.floor(Math.random() * 600), slowT: 0, poisonT: 0
         });
     }
 }
@@ -935,8 +1026,13 @@ function updateEnemies(p) {
     const B = CONFIG.PROP_BLOCK;
     enemies.forEach(en => {
         const dx = worldX - en.x, dy = worldY - en.y, dist = Math.hypot(dx, dy) || 1;
+        // 状態異常: スロー(ラコ)・毒(アウネ)・スローゾーン
+        let esp = en.spd;
+        if(en.slowT > 0) { en.slowT--; esp *= 0.5; }
+        if(zones.some(z => z.type === 'slow' && Math.hypot(en.x - z.x, en.y - z.y) < z.r)) esp *= 0.5;
+        if(en.poisonT > 0) { en.poisonT--; if(en.poisonT % 30 === 0) en.hp -= 4 * partyMul; }
         // 敵は弾を撃たない。接触と包囲の圧のみ。障害物は通れない(隠れられる)
-        let mvx = dx/dist * en.spd, mvy = dy/dist * en.spd;
+        let mvx = dx/dist * esp, mvy = dy/dist * esp;
         if(en.type === 1) {
             const w = Math.sin((frame + en.phase) * 0.08) * 2;
             mvx += (-dy/dist) * w; mvy += (dx/dist) * w;
@@ -951,18 +1047,25 @@ function updateEnemies(p) {
             addSex(p, CONFIG.CONTACT_SEX, true);
         }
         bullets.forEach(b => {
-            if(!b.dead && Math.hypot(b.x - en.x, b.y - en.y) < 30 + b.size) { en.hp -= b.dmg; b.dead = true; }
+            if(b.dead || Math.hypot(b.x - en.x, b.y - en.y) >= 30 + b.size) return;
+            if(b.pierce) { if(b.hit.includes(en.uid)) return; b.hit.push(en.uid); }
+            en.hp -= b.dmg;
+            applyOnHit(b.owner, en);
+            if(b.bounce > 0) {   // ぱふ先生: ヒットすると1回跳ねる
+                b.bounce--;
+                const ra = Math.random() * Math.PI * 2, sp = Math.hypot(b.vx, b.vy);
+                b.vx = Math.cos(ra) * sp; b.vy = Math.sin(ra) * sp;
+                b.l = b.out;
+            } else if(!b.pierce) b.dead = true;
         });
         if(en.hp <= 0 && !en.dead) {
             en.dead = true; killCount++;
             addScore(en.score);
             missionEvent('kill_any');
             if(en.type === 0) missionEvent('kill_wolf');
-            if(hasTrait(p, 'kyu')) p.sex = Math.max(0, p.sex - 2);   // 吸収: 撃破で鎮まる
-            const dropRate = CONFIG.DROP_MONEY_RATE + (hasTrait(p, 'kin') ? 0.15 : 0);   // 金運
             const r = Math.random();
-            if(r < dropRate) drops.push({ x:en.x, y:en.y, t:'money', val: CONFIG.ENEMY_DROP_VAL });
-            else if(r < dropRate + CONFIG.DROP_BLOOD_RATE) drops.push({ x:en.x, y:en.y, t:'blood', val:0 });
+            if(buffs.yuna > 0 || r < CONFIG.DROP_MONEY_RATE) drops.push({ x:en.x, y:en.y, t:'money', val: CONFIG.ENEMY_DROP_VAL });   // ユゥナリナ爆発: 必ず💰
+            else if(r < CONFIG.DROP_MONEY_RATE + CONFIG.DROP_BLOOD_RATE) drops.push({ x:en.x, y:en.y, t:'blood', val:0 });
         }
     });
 }
@@ -976,7 +1079,7 @@ function updateBoss(p) {
         boss = {
             x: Math.max(M, Math.min(CONFIG.STAGE_W - M, worldX)),
             y: Math.max(M, Math.min(CONFIG.STAGE_H - M, worldY - 400)),
-            hp, maxHp: hp
+            hp, maxHp: hp, uid: 'B' + bossKills
         };
         pushText("中ボス出現！タフな金づるだ", "#f80", 80, -100);
         document.getElementById('boss-hp-bar').style.display = 'block';
@@ -991,10 +1094,10 @@ function updateBoss(p) {
         const hpScale = 1 + (frame / 60 / 60) * 0.5;
         for(let k=0; k<n; k++) {
             const a = Math.random() * Math.PI * 2;
-            enemies.push({ ...type,
+            enemies.push({ ...type, uid: enemyUid++,
                 x: boss.x + Math.cos(a) * 70, y: boss.y + Math.sin(a) * 70,
                 hp: Math.round(type.hp * hpScale), maxHp: Math.round(type.hp * hpScale),
-                phase: Math.floor(Math.random() * 600) });
+                phase: Math.floor(Math.random() * 600), slowT: 0, poisonT: 0 });
         }
         pushText("手下を呼んだ！", "#f66", 30, -90);
     }
@@ -1004,7 +1107,10 @@ function updateBoss(p) {
         addSex(p, CONFIG.BOSS_CONTACT_SEX, true);
     }
     bullets.forEach(b => {
-        if(!b.dead && Math.hypot(b.x - boss.x, b.y - boss.y) < 60) { boss.hp -= b.dmg; b.dead = true; }
+        if(b.dead || Math.hypot(b.x - boss.x, b.y - boss.y) >= 60) return;
+        if(b.pierce) { if(b.hit.includes(boss.uid)) return; b.hit.push(boss.uid); }
+        boss.hp -= b.dmg;
+        if(!b.pierce) b.dead = true;
     });
     if(boss.hp <= 0) {
         for(let k=0; k<18; k++) drops.push({ x:worldX+(Math.random()-0.5)*140, y:worldY+(Math.random()-0.5)*140, t:'money', val: CONFIG.BOSS_DROP_VAL });
@@ -1036,16 +1142,17 @@ function updateDrops(p) {
     drops.forEach(d => {
         if(d.dead || Math.hypot(d.x - worldX, d.y - worldY) >= pickupR) return;
         d.dead = true;
+        const itemMul = buffs.minari > 0 ? 2 : 1;   // ミナリ爆発: アイテム効果2倍
         if(d.t === 'money') {
-            sessionMoney += d.val;
+            sessionMoney += d.val * itemMul;
             missionEvent('money');
-            pushText(`+¥${d.val}`, "#ff0", 30, -60);
+            pushText(`+¥${d.val * itemMul}`, "#ff0", 30, -60);
         } else if(d.t === 'package') {
             const it = ITEM_DEFS.find(x => x.id === d.itemId);
             if(it) { it.f(); pushText(`${it.n} 発動！`, "#ffd700", 50, -70); }
         } else {
             // 🩸: 快感チャージ (拾って白♡を貯められる) ＋ 20秒間スコア倍率+0.3
-            addSex(p, CONFIG.BLOOD_SEX_GAIN, false);
+            addSex(p, CONFIG.BLOOD_SEX_GAIN * itemMul, false);
             bloodTimer = CONFIG.BLOOD_SCORE_TIME;
             pushText("快感チャージ +♡", "#f0f", 30, -60);
         }
@@ -1070,6 +1177,13 @@ function draw() {
     ctx.strokeStyle = "#f0f"; ctx.lineWidth = 4;
     ctx.strokeRect(-worldX+cx, -worldY+cy, CONFIG.STAGE_W, CONFIG.STAGE_H);
 
+    // 設置ゾーン (スロー=青 / 毒=緑 / ダメージ=橙)
+    zones.forEach(z => {
+        ctx.globalAlpha = 0.13 + 0.05 * Math.sin(frame * 0.1);
+        ctx.fillStyle = z.type === 'slow' ? '#08f' : (z.type === 'poison' ? '#3f6' : '#f80');
+        ctx.beginPath(); ctx.arc(z.x-worldX+cx, z.y-worldY+cy, z.r, 0, 7); ctx.fill();
+        ctx.globalAlpha = 1;
+    });
     ctx.textAlign = "center";
     ctx.font = "30px Arial";
     props.forEach(pr => ctx.fillText(pr.t, pr.x-worldX+cx, pr.y-worldY+cy+10));
@@ -1078,6 +1192,18 @@ function draw() {
     drops.forEach(d => ctx.fillText(d.t === 'money' ? '💰' : (d.t === 'package' ? '📦' : '🩸'), d.x-worldX+cx, d.y-worldY+cy+bob));
     ctx.fillStyle = "#0ff";
     bullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x-worldX+cx, b.y-worldY+cy, b.size, 0, 7); ctx.fill(); });
+    // 薙ぎ払い/オーラの一閃
+    sweepFx.forEach(s => {
+        s.l--;
+        ctx.strokeStyle = "#fff"; ctx.lineWidth = 5;
+        ctx.globalAlpha = Math.max(0, s.l / 12) * 0.6;
+        ctx.beginPath();
+        if(s.full) ctx.arc(cx, cy, s.r, 0, 7);
+        else ctx.arc(cx, cy, s.r * 0.8, s.ang - 1.05, s.ang + 1.05);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+    });
+    sweepFx = sweepFx.filter(s => s.l > 0);
     ctx.fillStyle = "#eee"; ctx.font = "30px Arial";
     enemies.forEach(en => ctx.fillText(en.icon, en.x-worldX+cx, en.y-worldY+cy+10));
     if(boss) { ctx.font = "80px Arial"; ctx.fillText("👹", boss.x-worldX+cx, boss.y-worldY+cy+30); }
@@ -1092,6 +1218,8 @@ function draw() {
         ctx.globalAlpha = 0.3 + 0.3 * Math.abs(Math.sin(frame * 0.2));
         ctx.strokeStyle = "#fa0"; ctx.lineWidth = 2;
         ctx.beginPath(); ctx.arc(dx, dy, 30, 0, 7); ctx.stroke();
+        ctx.globalAlpha = 0.9; ctx.font = "12px sans-serif"; ctx.fillStyle = "#ff6";
+        ctx.fillText(`♥×${d.left}`, dx, dy + 32);
         ctx.globalAlpha = 1;
     });
     if(burstFx) {
