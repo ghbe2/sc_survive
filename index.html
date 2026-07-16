@@ -178,8 +178,8 @@ const CONFIG = {
     BOSS_CONTACT_DIST: 60, BOSS_CONTACT_SEX: 15, BOSS_CONTACT_KNOCK: 50,   // 弱体化 (旧25)
     KILL_INVULN: 60,
     SWITCH_COOLDOWN: 45,
-    BENCH_SEX_REGEN: 0.05,     // 控えメンバーの快感自然回復/F
-    STAND_CHARGE: 0.4,         // 立ち止まりチャージ/F (約4秒でMAX)
+    BENCH_SEX_REGEN: 0.01,     // 控えメンバーの快感自然発散/F (遅め。貯めた意味を保つ)
+    STAND_CHARGE: 0.016,       // 立ち止まりチャージ/F (約100秒でMAX。主なチャージ源は🩸ドロップ)
     RESIST_GUARD: 0.04,        // 精神力Lvごとの被ゲージ-4%
     RAVAGE_INVULN: 60,         // 蹂躙離脱後の無敵 (救済)
     JOY_RADIUS: 50,
@@ -200,13 +200,13 @@ const CONFIG = {
     GLOW_MULT: 1.5,
     // --- コア刷新: 2色ハート / 爆発 / 置き土産デバイス ---
     HEART_MAX_DEFAULT: 5,          // ♡上限 (キャラで上書き)
-    HEART_SLOW_PER: 0.06,          // ハート1つあたり移動-6%
-    HEART_SLOW_MIN: 0.4,           // 鈍足の下限 (40%まで)
+    HEART_SLOW_PER: 0.15,          // ハート1つあたり移動-15% (1個目から重い)
+    HEART_SLOW_MIN: 0.25,          // 鈍足の下限 (25%まで)
     CHARGE_PER_HEART: 0.10,        // (雪だるま) 白♡1つでチャージ速度+10%
-    BURST_CHARGE_BUFF: 90,         // 爆発後チャージ加速の持続F
+    BURST_CHARGE_BUFF: 300,        // 爆発後チャージ加速の持続F
     BURST_CHARGE_BUFF_MUL: 1.6,    // 爆発後チャージ倍率
-    BURST_INTERVAL: 24,            // 爆発の最短間隔F (長押し連発の上限)
-    DEVICE_BURST_INTERVAL: 30,     // 置き土産デバイスの爆発間隔F
+    BURST_COOLDOWN: 900,           // 爆発クールタイム (15秒に1回。置き土産の爆発間隔も同じ)
+    DEVICE_FIRST_DELAY: 60,        // 置き土産の初弾までのF
     HOMING_TURN: 0.09              // 追尾Lvあたりの旋回力
 };
 
@@ -440,7 +440,7 @@ function resetRun() {
     devices = []; burstCd = 0; keyBurstHeld = false;
     missions = []; missionDoneCount = {};
     while(missions.length < 3) addMission();
-    activeIdx = 0; knockVec = {x:0, y:0}; moveVec = {x:0, y:0};
+    activeIdx = 0; knockVec = {x:0, y:0}; moveVec = {x:0, y:0}; lastAim = {x:1, y:0};
     gestures.clear(); moveTouchId = null; lastTap = { t: 0, x: 0, y: 0 };
     lastTime = 0; acc = 0;
     enemies = []; props = []; drops = []; bullets = []; enemyBullets = []; floatingTexts = [];
@@ -457,7 +457,7 @@ function resetRun() {
 }
 
 // ---------------- ジェスチャー入力: ドラッグ=移動 / ダブルタップ=交代 ----------------
-let moveVec = {x:0, y:0}, joyStart = {x:0, y:0};
+let moveVec = {x:0, y:0}, joyStart = {x:0, y:0}, lastAim = {x:1, y:0};
 let moveTouchId = null;
 let lastTap = { t: 0, x: 0, y: 0 };
 const gestures = new Map();   // id -> {x, y, t, moved}
@@ -566,23 +566,24 @@ function spawnDevice(p) {
         left: p.white, type: p.burstType || 'attack',
         dmg: CONFIG.BURST_DMG * effAtk(p),
         radius: CONFIG.BURST_RADIUS * runMods.burstMul,
-        timer: CONFIG.DEVICE_BURST_INTERVAL
+        timer: CONFIG.DEVICE_FIRST_DELAY
     });
 }
 function updateDevices() {
     devices.forEach(d => {
         if(--d.timer > 0) return;
-        d.timer = CONFIG.DEVICE_BURST_INTERVAL;
+        d.timer = CONFIG.BURST_COOLDOWN;   // 手動爆発と同じクールタイムを参照
         doBurstAt(d.x, d.y, d.dmg, d.radius, "#fa0");   // 攻撃型: その場で範囲攻撃
         if(--d.left <= 0) d.dead = true;
     });
     devices = devices.filter(d => !d.dead);
 }
-// 長押しで発動する爆発 (白♡1消費)。使うほどチャージ加速=連続絶頂
+// 長押しで発動する爆発 (白♡1消費)。クールタイム制 (15秒に1回)。使うほどチャージ加速=連続絶頂
 function tryBurst(p) {
-    if(isOver || p.dead || p.stun > 0 || burstCd > 0 || p.white <= 0) return;
+    if(isOver || p.dead || p.stun > 0 || p.white <= 0) return;
+    if(burstCd > 0) { if(frame % 60 === 0) pushText(`爆発まであと${Math.ceil(burstCd / 60)}秒`, "#888", 30); return; }
     p.white--;
-    burstCd = CONFIG.BURST_INTERVAL;
+    burstCd = CONFIG.BURST_COOLDOWN;
     p.chargeBuffTimer = CONFIG.BURST_CHARGE_BUFF;
     doBurstAt(worldX, worldY, CONFIG.BURST_DMG * effAtk(p), CONFIG.BURST_RADIUS * runMods.burstMul, "#f0f");
     addScore(CONFIG.BURST_SCORE);
@@ -596,36 +597,27 @@ function doBurstAt(x, y, dmg, radius, color) {
 }
 
 // ---------------- 快感ゲージ → 2色ハート ----------------
-// 自力で100 → 白♡(爆発の弾薬)。敵に100 → 黒♡(篭絡・恒久デバフ)。全♡が黒で離脱。
+// ♡は♡、白黒同格 (差は爆発で消費できるかだけ)。白+黒の合算が上限に達したら離脱。
+// 自力で100 → 白♡(爆発の弾薬)。敵に100 → 黒♡(篭絡・消せない)。
 function addSex(p, amount, fromEnemy) {
     if(isOver || p.dead) return;
     if(fromEnemy) {
         if(invulnTimer > 0) return;
         amount *= (1 - saveData.upgrades.resist * CONFIG.RESIST_GUARD) * runMods.guardMul;
-    } else if(p.white + p.black >= p.heartMax) {
-        p.sex = 100; return;   // ♡満杯: 自力チャージ不可 (爆発で吐け)
     }
     p.sex += amount;
     if(p.sex >= 100) { p.sex = 0; gainHeart(p, fromEnemy); }
 }
 function gainHeart(p, fromEnemy) {
-    if(fromEnemy) {
-        if(p.white + p.black >= p.heartMax) {
-            if(p.white > 0) { p.white--; p.black++; pushText("白♡が黒く染まる…", "#c6c", 40, -60); }
-        } else {
-            p.black++; pushText("篭絡…黒♡+1", "#c6c", 40, -60);
-        }
-        if(p.black >= p.heartMax) { ravage(p); return; }
-    } else {
-        if(p.white + p.black >= p.heartMax) { p.sex = 100; return; }
-        p.white++; pushText("♡+1 長押しで爆発", "#ff6", 32, -50);
-    }
+    if(fromEnemy) { p.black++; pushText("篭絡…黒♡+1", "#c6c", 40, -60); }
+    else { p.white++; pushText("♡+1 長押しで爆発", "#ff6", 32, -50); }
+    if(p.white + p.black >= p.heartMax) { ravage(p); return; }
     updateMemberUI();
 }
 function ravage(p) {
     p.dead = true; p.sex = 0; p.white = 0;
     ravagedThisCycle = true;
-    pushText(`${p.e} 全♡が黒く…蹂躙され離脱`, "#f33", 80, -70);
+    pushText(`${p.e} ♡が限界…蹂躙され離脱`, "#f33", 80, -70);
     const aliveIdx = party.findIndex(m => !m.dead);
     if(aliveIdx === -1) { endGame(); return; }
     if(party[activeIdx].dead) {
@@ -811,6 +803,7 @@ function update() {
 }
 
 function updatePlayer(p) {
+    if(moveVec.x !== 0 || moveVec.y !== 0) lastAim = { x: moveVec.x, y: moveVec.y };
     const heartSlow = Math.max(CONFIG.HEART_SLOW_MIN, 1 - (p.white + p.black) * CONFIG.HEART_SLOW_PER);
     const spd = effSpd(p) * heartSlow;
     const nx = worldX + moveVec.x * spd + knockVec.x;
@@ -828,15 +821,8 @@ function updateAttack(p) {
     const renMul = hasTrait(p, 'ren') ? 0.75 : 1;
     const cool = Math.max(5, Math.floor(p.cool * runMods.coolMul * renMul));
     if(frame % cool !== 0) return;
-    let target = null, best = Infinity;
-    const scan = boss ? [boss] : enemies;
-    scan.forEach(t => {
-        const d = Math.hypot(t.x - worldX, t.y - worldY);
-        if(d < best) { best = d; target = t; }
-    });
-    let vx = 1, vy = 0;
-    if(target && best < CONFIG.TARGET_RANGE) { vx = target.x - worldX; vy = target.y - worldY; }
-    else if(moveVec.x !== 0 || moveVec.y !== 0) { vx = moveVec.x; vy = moveVec.y; }
+    // 自動照準なし: 移動している向きに撃つ (止まっている間は最後に向いていた方向)
+    const vx = lastAim.x, vy = lastAim.y;
     // キャラ固有弾 (第1弾: 丑・寅・午・酉)
     switch(p.id) {
         case 1:
@@ -1120,9 +1106,9 @@ function draw() {
     ctx.globalAlpha = standing ? (0.75 + 0.25 * Math.sin(frame * 0.25)) : 0.9;
     ctx.beginPath(); ctx.arc(cx, cy, 50, -Math.PI/2, -Math.PI/2 + (p.sex/100) * Math.PI * 2); ctx.stroke();
     ctx.globalAlpha = 1;
-    // 白♡を持っていると外側に発光 (長押しで爆発できる合図)
+    // 白♡を持っていると外側に発光 (黄=爆発OK / 灰=クールタイム中)
     if(p.white > 0) {
-        ctx.strokeStyle = "#ff0"; ctx.lineWidth = 3;
+        ctx.strokeStyle = burstCd <= 0 ? "#ff0" : "#666"; ctx.lineWidth = 3;
         ctx.globalAlpha = 0.4 + Math.sin(frame * 0.3) * 0.25;
         ctx.beginPath(); ctx.arc(cx, cy, 61 + Math.sin(frame * 0.15) * 4, 0, 7); ctx.stroke();
         ctx.globalAlpha = 1;
