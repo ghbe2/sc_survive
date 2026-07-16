@@ -1,0 +1,1249 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>十二支サバイバー v1-dev</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #1a2e1a; touch-action: none; font-family: sans-serif; color: #eee; user-select: none; -webkit-user-select: none; }
+        canvas { display: block; }
+        .scene { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: flex-start; background: rgba(0,0,0,0.95); z-index: 100; text-align: center; padding: 10px; overflow-y: auto; }
+
+        /* UIパーツ */
+        .shop-header { display: flex; justify-content: space-between; width: 100%; max-width: 400px; margin-bottom: 4px; border-bottom: 1px solid #444; padding-bottom: 5px; }
+        .shop-money { color: #ffd700; font-weight: bold; font-size: 18px; }
+        #shop-best { width: 100%; max-width: 400px; text-align: right; color: #0ff; font-size: 12px; margin-bottom: 10px; }
+        .upgrade-grid { display: grid; grid-template-columns: 1fr; gap: 8px; width: 100%; max-width: 400px; margin-bottom: 20px; }
+        .upgrade-card { background: #222; border: 1px solid #444; padding: 10px; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; }
+        .up-info { text-align: left; }
+        .up-name { font-size: 14px; color: #0ff; font-weight: bold; }
+        .up-val { font-size: 11px; color: #888; }
+        .up-btn { background: #444; color: #fff; border: none; padding: 8px 15px; border-radius: 20px; font-size: 12px; cursor: pointer; min-width: 80px; }
+        .up-btn.can-buy { background: #f0f; color: #fff; box-shadow: 0 0 5px #f0f; }
+        .up-btn:active { transform: scale(0.95); }
+
+        #preview-box { width: 100%; max-width: 400px; height: 60px; background: #000; border: 2px solid #444; border-radius: 10px; margin-bottom: 5px; flex-shrink: 0; }
+        .selected-slots { display: flex; gap: 8px; margin-bottom: 10px; }
+        .slot { width: 50px; height: 50px; border: 2px dashed #555; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 26px; background: rgba(255,255,255,0.05); }
+        .slot.filled { border: 2px solid #f0f; background: rgba(255,0,255,0.1); }
+        .char-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; width: 100%; max-width: 400px; margin-bottom: 8px; }
+        .char-card { position: relative; background: #222; border: 2px solid #444; padding: 8px 4px; border-radius: 6px; cursor: pointer; }
+        .char-card.selected { border-color: #f0f; box-shadow: 0 0 8px #f0f; }
+        .char-card .trait-tag { display: block; font-size: 9px; font-weight: bold; margin-top: 2px; }
+
+        .main-btn { width: 100%; max-width: 300px; padding: 12px; border-radius: 30px; background: #444; color: #aaa; border: none; font-weight: bold; font-size: 16px; margin-top: 10px; }
+        .main-btn.active { background: linear-gradient(45deg, #f0f, #80f); color: white; box-shadow: 0 4px 15px rgba(255,0,255,0.4); cursor: pointer; }
+
+        /* EC / ミッション オーバーレイ */
+        .overlay-menu { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.9); z-index: 90; text-align: center; padding: 20px; }
+        .draft-card { background: #1c1c2e; border: 2px solid #ffd700; border-radius: 10px; padding: 14px; width: 90%; max-width: 340px; margin-bottom: 10px; cursor: pointer; text-align: left; }
+        .draft-card:active { transform: scale(0.97); }
+        .draft-card.ec-poor { opacity: 0.5; border-color: #555; }
+        .draft-name { font-size: 16px; font-weight: bold; color: #ffd700; }
+        .draft-desc { font-size: 12px; color: #aaa; margin-top: 3px; }
+
+        /* ゲームUI */
+        #game-ui { position: absolute; inset: 0; pointer-events: none; display: none; }
+        .stat-box { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.75); padding: 8px; border-radius: 8px; color: #0ff; font-size: 10px; pointer-events: none; text-align: left; line-height: 1.7; }
+        #score-box { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); text-align: center; pointer-events: none; }
+        #score-val { font-weight: bold; font-size: 18px; color: #fff; transition: color 0.2s; }
+        #score-mult { font-size: 11px; color: #888; }
+        .status-group { position: absolute; top: 10px; right: 10px; width: 160px; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+        #menu-btns { position: absolute; bottom: 28px; right: 12px; display: flex; flex-direction: column; gap: 12px; pointer-events: auto; align-items: flex-end; }
+        .hud-btn { background: rgba(0,0,0,0.8); border: 1px solid #666; border-radius: 12px; color: #eee; font-size: 15px; padding: 10px 14px; cursor: pointer; font-family: inherit; }
+        .hud-btn:active { transform: scale(0.95); }
+        .hud-btn.ready-glow { border-color: #0f8; box-shadow: 0 0 14px #0f8; color: #cffde8; }
+        #time-display { color: #8ff; font-size: 12px; font-weight: bold; }
+        .bar-bg { position: relative; width: 100%; height: 12px; background: #333; border-radius: 6px; overflow: hidden; border: 1px solid #555; }
+        #sex-bar { height: 100%; background: linear-gradient(90deg, #f0f, #ff69b4); width: 0%; }
+        #trait-display { color: #ffd700; font-size: 10px; text-align: right; }
+        #heart-display { font-size: 15px; letter-spacing: 2px; line-height: 1; text-align: right; }
+        #level-display { color: #0ff; font-size: 11px; font-weight: bold; }
+
+        #joystick-base { position: absolute; width: 120px; height: 120px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 50%; display: none; pointer-events: none; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+        #joystick-stick { position: absolute; width: 30px; height: 30px; background: rgba(255,255,255,0.2); border-radius: 50%; left: 45px; top: 45px; }
+
+        #bottom-controls { position: absolute; bottom: 30px; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 15px; pointer-events: auto; }
+        .member-btns { display: flex; gap: 10px; }
+        .btn-member { position: relative; overflow: hidden; width: 50px; height: 50px; background: #222; border: 2px solid #444; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 24px; transition: 0.1s; }
+        .btn-member.active { border-color: #f0f; box-shadow: 0 0 10px #f0f; background: #322; transform: scale(1.1); }
+        .btn-member.maxed { border-color: #ff0; box-shadow: 0 0 12px #ff0; }
+        .btn-member.danger { border-color: #c39; }
+        .btn-member.dead { opacity: 0.25; filter: grayscale(1); }
+        .btn-member .mini-gauge { position: absolute; bottom: 0; left: 0; height: 4px; width: 0%; background: linear-gradient(90deg, #f0f, #ff69b4); }
+        #gesture-hint { position: absolute; bottom: 110px; width: 100%; text-align: center; color: rgba(255,255,255,0.35); font-size: 10px; pointer-events: none; }
+    </style>
+</head>
+<body>
+
+    <div id="shop-scene" class="scene" style="justify-content:center;">
+        <h1 style="color:#f0f; margin:10px 0; font-size:30px;">十二支サバイバー</h1>
+        <div id="shop-best">BEST SCORE: ---</div>
+        <button onclick="goToSetup()" class="main-btn active" style="margin-top:24px;">編成へ進む</button>
+        <button onclick="resetSave()" style="margin-top:20px; background:none; border:none; color:#555; font-size:10px;">データ初期化</button>
+    </div>
+
+    <div id="setup-scene" class="scene">
+        <h3 style="color:#f0f; margin:5px 0;">出撃メンバー選択</h3>
+        <div id="preview-box"><canvas id="previewCanvas"></canvas></div>
+        <div class="selected-slots"><div class="slot" id="slot-0"></div><div class="slot" id="slot-1"></div><div class="slot" id="slot-2"></div><div class="slot" id="slot-3"></div></div>
+        <div id="char-grid" class="char-grid"></div>
+        <div id="party-bonus" style="font-size:10px; color:#0ff; margin-bottom:4px;"></div>
+        <div style="font-size:10px; color:#888; max-width:400px; margin-bottom:8px;">並び順=交代順。♡を抱えて交代すると置き土産(自動攻撃)や特性継承が発動</div>
+        <button onclick="tryStart()" id="start-btn" class="main-btn">キャラを選んでください</button>
+        <button onclick="backToShop()" style="background:none; border:none; color:#888; margin-top:10px;">ショップへ戻る</button>
+    </div>
+
+    <div id="game-ui">
+        <div id="menu-btns">
+            <button class="hud-btn" onclick="openMissions()">🎯</button>
+            <button class="hud-btn" id="ec-btn" onclick="openEC()">🛒<span id="ec-btn-money">¥0</span></button>
+        </div>
+        <div id="score-box">
+            <div id="score-val">0</div>
+            <div id="score-mult">x1.0</div>
+        </div>
+        <div class="status-group">
+            <div id="time-display">⏱ 0:00</div>
+            <div id="heart-display"></div>
+            <div id="boss-hp-bar" style="display:none; width:100%; height:8px; background:#300; border:1px solid #f00; margin-top:5px;"><div id="boss-hp" style="width:100%; height:100%; background:#f00;"></div></div>
+        </div>
+        <div id="joystick-base"><div id="joystick-stick"></div></div>
+        <div id="gesture-hint">引っ張る=移動　タップ=交代　長押し=爆発(♡消費)　止まる=チャージ</div>
+        <div id="bottom-controls">
+            <div class="member-btns" id="member-btns"></div>
+        </div>
+    </div>
+
+    <div id="ec-scene" class="overlay-menu">
+        <h2 style="color:#ffd700; margin:0 0 2px 0;">🛒 EC で注文</h2>
+        <div id="ec-money" style="color:#0f8; font-size:14px; font-weight:bold; margin-bottom:8px;">所持 ¥0</div>
+        <div style="color:#888; font-size:11px; margin-bottom:12px;">買うと数秒後にマップへ📦が届く。拾って発動。</div>
+        <div id="ec-list" style="width:100%; display:flex; flex-direction:column; align-items:center; overflow-y:auto;"></div>
+        <button onclick="closeEC()" class="main-btn active" style="margin-top:10px; max-width:220px;">閉じて戦闘へ</button>
+    </div>
+    <div id="mission-scene" class="overlay-menu">
+        <h2 style="color:#0ff; margin:0 0 12px 0;">🎯 ミッション</h2>
+        <div id="mission-body" style="font-size:14px; line-height:1.6; margin-bottom:16px;"></div>
+        <button onclick="closeMissions()" class="main-btn active" style="max-width:220px;">閉じる</button>
+    </div>
+
+    <div id="result-scene" class="scene" style="justify-content: center;">
+        <h1 id="res-title" style="font-size: 36px; margin: 0;"></h1>
+        <div id="res-score" style="font-size: 44px; font-weight: bold; color: #fff; margin: 10px;"></div>
+        <p id="res-stats" style="color:#ccc; margin:10px; font-size:14px; line-height:1.9;"></p>
+        <p id="res-money" style="color:#ffd700; font-size:18px; font-weight:bold;"></p>
+        <button onclick="retryRun()" class="main-btn active" style="margin-top:20px;">もう1回</button>
+        <button onclick="backToShopFromResult()" style="background:none; border:none; color:#888; margin-top:15px;">ショップへ戻る</button>
+    </div>
+
+    <canvas id="mainCanvas"></canvas>
+
+<script>
+// ================================================================
+// 十二支サバイバー v1 開発版 (コアv3: 特性継承・立ち止まりチャージ・宅配ドラフト・ミッション)
+// 基本ループ: かわす → 倒す → 稼ぐ → レベルアップ(宅配ボックス3択) → 強くなる
+// ゲージ: 立ち止まると溜まる。自力MAX→交代で絶頂爆発＋特性継承 / 敵にMAXにされると蹂躙離脱
+// 操作: ドラッグ=移動 / ダブルタップ=交代 / 立ち止まる=チャージ
+// ================================================================
+
+// ---------------- CONFIG: バランス定数はここに集約 ----------------
+const CONFIG = {
+    STEP_MS: 1000 / 60,
+    MAX_FRAME_MS: 100,
+    STAGE_W: 880, STAGE_H: 1912,
+    GRID_SIZE: 100,
+    WALL_MARGIN: 20,
+    PROP_COUNT: 10, PROP_HP: 20, PROP_BLOCK: 40, PROP_SAFE_DIST: 120,   // 障害物=遮蔽物 (非破壊・敵を巻く用)
+    PROP_RESPAWN_INTERVAL: 240, PROP_RESPAWN_DIST: 300,
+    // --- EC(自発ショップ) + 宅配ドロップ ---
+    DELIVERY_DELAY: 300,                    // 注文から投下まで (約5秒)
+    DELIVERY_DIST_MIN: 180, DELIVERY_DIST_MAX: 340,
+    EC_PRICE_GROWTH: 1.6,                   // 同じ商品を買うたび価格1.6倍
+    ENEMY_MAX: 8, ENEMY_MAX_CAP: 18,
+    ENEMY_SPAWN_INTERVAL: 100, SPAWN_MIN_INTERVAL: 40, ENEMY_SPAWN_DIST: 500,
+    TARGET_RANGE: 600,
+    BULLET_SPEED: 12, BULLET_LIFE: 45, BULLET_SIZE: 5,
+    CONTACT_DIST: 40, CONTACT_INTERVAL: 20, CONTACT_SEX: 10, CONTACT_KNOCK: 20,
+    ENEMY_BULLET_SEX: 15,
+    PICKUP_RADIUS: 50,
+    DROP_MONEY_RATE: 0.14, DROP_BLOOD_RATE: 0.42,            // 💰は控えめ / 🩸(ゲージ源)は多め
+    PROP_DROP_VAL: 100, ENEMY_DROP_VAL: 900, BOSS_DROP_VAL: 1800,
+    BLOOD_SEX_GAIN: 28,                                       // 🩸拾得で快感チャージ (白♡源)
+    BOSS_NORMA: 40,                                           // 中ボスはたまに (旧15=出過ぎ)
+    BOSS_HP: 350, BOSS_HP_GROWTH: 0.35, BOSS_SPD: 1.5,       // 中ボス=ザコの約10倍のタフさ (旧1800)
+    BOSS_ATK_INTERVAL: 90, BOSS_BULLET_SPD: 3.0,              // (未使用) ボスは弾を撃たない
+    BOSS_RING_INTERVAL: 120,
+    BOSS_SUMMON_INTERVAL: 150,                                // ボスは弾でなく手下を呼ぶ
+    BOSS_CONTACT_DIST: 60, BOSS_CONTACT_SEX: 15, BOSS_CONTACT_KNOCK: 50,   // 弱体化 (旧25)
+    KILL_INVULN: 60,
+    SWITCH_COOLDOWN: 45,
+    BENCH_SEX_REGEN: 0.05,     // 控えメンバーの快感自然回復/F
+    STAND_CHARGE: 0.4,         // 立ち止まりチャージ/F (約4秒でMAX)
+    RESIST_GUARD: 0.04,        // 精神力Lvごとの被ゲージ-4%
+    RAVAGE_INVULN: 60,         // 蹂躙離脱後の無敵 (救済)
+    JOY_RADIUS: 50,
+    // ジェスチャー
+    TAP_MS: 250, DOUBLE_TAP_MS: 300, DOUBLE_TAP_PX: 50, DRAG_PX: 10,
+    // 絶頂爆発 (MAX交代)
+    BURST_RADIUS: 300, BURST_DMG: 150,   // ダメージは×atk
+    BURST_SCORE: 1000, BURST_INVULN: 30,
+    INHERIT_TIME: 900,         // 特性継承 15秒
+    // 少数精鋭ボーナス (空きスロット1つあたり)
+    SOLO_ATK: 0.12, SOLO_SPD: 0.08, SOLO_MULT: 0.25,
+    // レベルアップ
+    LEVEL_BASE: 1500, LEVEL_GROWTH: 1.5,
+    // スコア
+    SCORE_PROP: 10, SCORE_BOSS: 3000, SCORE_PERFECT: 1000,
+    SURVIVAL_TICK: 600, SURVIVAL_BASE: 50,
+    BLOOD_SCORE_TIME: 1200, BLOOD_SCORE_BONUS: 0.3,
+    GLOW_MULT: 1.5,
+    // --- コア刷新: 2色ハート / 爆発 / 置き土産デバイス ---
+    HEART_MAX_DEFAULT: 5,          // ♡上限 (キャラで上書き)
+    HEART_SLOW_PER: 0.06,          // ハート1つあたり移動-6%
+    HEART_SLOW_MIN: 0.4,           // 鈍足の下限 (40%まで)
+    CHARGE_PER_HEART: 0.10,        // (雪だるま) 白♡1つでチャージ速度+10%
+    BURST_CHARGE_BUFF: 90,         // 爆発後チャージ加速の持続F
+    BURST_CHARGE_BUFF_MUL: 1.6,    // 爆発後チャージ倍率
+    BURST_INTERVAL: 24,            // 爆発の最短間隔F (長押し連発の上限)
+    DEVICE_BURST_INTERVAL: 30,     // 置き土産デバイスの爆発間隔F
+    HOMING_TURN: 0.09              // 追尾Lvあたりの旋回力
+};
+
+// ---------------- データ定義 ----------------
+// tr: 特性 (2キャラで1特性を共有)。t: 固有弾ラベル
+const TRAITS = {
+    shun: { n:"俊敏", c:"#5cf", desc:"移動速度+25%" },
+    gou:  { n:"剛力", c:"#f96", desc:"弾の威力+40%" },
+    ren:  { n:"連射", c:"#fd5", desc:"攻撃間隔-25%" },
+    kyu:  { n:"吸収", c:"#a7f", desc:"敵撃破でゲージ-2" },
+    kin:  { n:"金運", c:"#fc3", desc:"ドロップ率UP・磁石" },
+    kou:  { n:"高揚", c:"#f6a", desc:"スコア倍率+0.2" }
+};
+const CHAR_DEFS = [
+    { id:0, n:"子", e:"🐭", spd:5.0, cool:30, t:"速射", tr:"shun" }, { id:1, n:"丑", e:"🐮", spd:3.0, cool:60, t:"剛弾", tr:"gou" },
+    { id:2, n:"寅", e:"🐯", spd:4.5, cool:25, t:"2WAY", tr:"ren" }, { id:3, n:"卯", e:"🐰", spd:6.0, cool:35, t:"俊足", tr:"shun" },
+    { id:4, n:"辰", e:"🐲", spd:4.0, cool:50, t:"-", tr:"kin" }, { id:5, n:"巳", e:"🐍", spd:4.5, cool:28, t:"-", tr:"kyu" },
+    { id:6, n:"午", e:"🐴", spd:5.5, cool:30, t:"二丁", tr:"kou" }, { id:7, n:"未", e:"🐏", spd:3.5, cool:45, t:"-", tr:"kyu" },
+    { id:8, n:"申", sName:"マユゥ", e:"🐵", spd:5.2, cool:25, t:"ガラクタ", tr:"kin",
+      heartMax:7, chargeAccel:true, rangeMul:0.6, burstType:'attack', switchType:'device' }, { id:9, n:"酉", e:"🐔", spd:5.0, cool:28, t:"三連", tr:"ren" },
+    { id:10, n:"戌", e:"🐶", spd:4.8, cool:30, t:"-", tr:"kou" }, { id:11, n:"亥", e:"🐗", spd:4.2, cool:40, t:"-", tr:"gou" }
+];
+// メタショップ(ラン間の永続強化)は一旦畳んだ。将来アンロック要素等で復活予定
+// 群れ主体 (仕様書§1.2): 弾を撃つのは🐍エリートとボスのみ
+const ENEMY_TYPES = [
+    { type:0, icon:'🐺', hp:25, spd:1.9, cool:0, score:100, weight:45, pack:[2,3] },
+    { type:1, icon:'🦇', hp:15, spd:2.3, cool:0, score:80, weight:35, pack:[2,4] },
+    { type:2, icon:'🐍', hp:50, spd:1.0, cool:180, score:150, weight:20, pack:[1,1] }
+];
+// EC(自発ショップ)の商品。武器6種強化が主軸 (キャラ別ドラフトは後日)。価格は購入ごとに上昇
+const ITEM_DEFS = [
+    { id:'range', n:'広角レンズ', d:'射程 +15%', price:900, f:() => runMods.rangeMul += 0.15 },
+    { id:'atk', n:'プロテイン', d:'弾の威力 +20%', price:1000, f:() => runMods.atkMul += 0.2 },
+    { id:'homing', n:'ストーカー気質', d:'弾が敵を追尾する', price:2500, f:() => runMods.homing += 1 },
+    { id:'size', n:'特大サイズ', d:'弾サイズ +20%', price:900, f:() => runMods.sizeMul += 0.2 },
+    { id:'cool', n:'エナジードリンク', d:'発射間隔 -15%', price:1200, f:() => runMods.coolMul *= 0.85 },
+    { id:'bspd', n:'剛速球', d:'弾速 +20%', price:900, f:() => runMods.bulletSpdMul += 0.2 },
+    { id:'revive', n:'応急処置キット', d:'離脱メンバーが1人復帰', price:1500, cond:() => party.some(m => m.dead), f:() => { const m = party.find(m => m.dead); if(m) { m.dead = false; m.sex = 0; m.white = 0; m.black = Math.floor(m.heartMax/2); m.stun = 0; } } }
+];
+// ミッション (常時3枠、達成で報酬→補充。差別化その1)
+const MISSION_DEFS = [
+    { id:'kill_any', txt:n => `敵を${n}体倒す`, n:15, money:2000 },
+    { id:'kill_wolf', txt:n => `🐺を${n}体倒す`, n:8, money:1500 },
+    { id:'money', txt:n => `💰を${n}個拾う`, n:10, score:600 },
+    { id:'maxswitch', txt:n => `♡を持って交代 x${n}`, n:1, score:1000 },
+    { id:'survive', txt:n => `${n}秒 生き延びる`, n:45, money:1500 }
+];
+
+// ---------------- セーブデータ ----------------
+let saveData = { money: 0, upgrades: { resist:0, power:0, speed:0, cool:0, range:0 }, bestScores: [] };
+function loadSave() {
+    const d = localStorage.getItem('zodiac_v41');
+    if(!d) {
+        const old = localStorage.getItem('zodiac_v40');
+        if(old) {
+            try {
+                const s = JSON.parse(old);
+                saveData.money = s.money || 0;
+                saveData.upgrades = { ...saveData.upgrades, ...(s.upgrades || {}) };
+                saveGame();
+                localStorage.removeItem('zodiac_v40');
+            } catch(e) {}
+        }
+        return;
+    }
+    try {
+        const s = JSON.parse(d);
+        saveData = { ...saveData, ...s, upgrades: { ...saveData.upgrades, ...(s.upgrades || {}) }, bestScores: s.bestScores || [] };
+    } catch(e) {}
+}
+function saveGame() { localStorage.setItem('zodiac_v41', JSON.stringify(saveData)); }
+function resetSave() {
+    if(confirm("データを初期化しますか？")) {
+        localStorage.removeItem('zodiac_v41');
+        localStorage.removeItem('zodiac_v40');
+        location.reload();
+    }
+}
+
+// ---------------- シーン管理 ----------------
+const SCENE_IDS = { shop:'shop-scene', setup:'setup-scene', game:'game-ui', result:'result-scene' };
+function showScene(name) {
+    for(const [key, id] of Object.entries(SCENE_IDS)) {
+        document.getElementById(id).style.display = (key === name) ? (key === 'game' ? 'block' : 'flex') : 'none';
+    }
+}
+
+// ---------------- ショップ ----------------
+function initShop() {
+    document.getElementById('shop-best').innerText = 'BEST SCORE: ' + (saveData.bestScores.length ? saveData.bestScores[0].score.toLocaleString() : '---');
+}
+function goToSetup() { showScene('setup'); updateSetupUI(); startPreview(); }
+function backToShop() { stopPreview(); initShop(); showScene('shop'); }
+function backToShopFromResult() { initShop(); showScene('shop'); }
+
+// ---------------- 編成 ----------------
+let selectedIndices = [];
+function initSetupGrid() {
+    const grid = document.getElementById('char-grid');
+    grid.innerHTML = '';
+    CHAR_DEFS.forEach((c, i) => {
+        const card = document.createElement('div'); card.className = 'char-card';
+        const tr = TRAITS[c.tr];
+        card.innerHTML = `<div style="font-size:18px">${c.e}</div>` +
+            `<span class="trait-tag" style="color:${tr.c}">${tr.n}</span>` +
+            `<div style="font-size:8px; color:#777;">${c.t}</div>`;
+        card.onclick = () => {
+            if(selectedIndices.includes(i)) selectedIndices = selectedIndices.filter(id => id !== i);
+            else if(selectedIndices.length < 4) selectedIndices.push(i);
+            updateSetupUI();
+        };
+        grid.appendChild(card);
+    });
+    preCanvas.width = 400; preCanvas.height = 60;
+}
+function updateSetupUI() {
+    document.querySelectorAll('.char-card').forEach((cd, i) => {
+        cd.classList.toggle('selected', selectedIndices.includes(i));
+    });
+    for(let i=0; i<4; i++) {
+        const s = document.getElementById(`slot-${i}`);
+        if(selectedIndices[i] !== undefined) { s.innerText = CHAR_DEFS[selectedIndices[i]].e; s.classList.add('filled'); }
+        else { s.innerText = ''; s.classList.remove('filled'); }
+    }
+    // 少数精鋭ボーナス表示
+    const bonus = document.getElementById('party-bonus');
+    const empty = 4 - selectedIndices.length;
+    if(selectedIndices.length > 0 && empty > 0) {
+        bonus.innerText = `少数精鋭ボーナス: 威力+${empty*12}% 移動+${empty*8}% スコア倍率+${(empty*CONFIG.SOLO_MULT).toFixed(2)}`;
+    } else if(selectedIndices.length === 4) {
+        bonus.innerText = "フル編成: 継承シナジー＆残機で安定";
+    } else bonus.innerText = "";
+    const btn = document.getElementById('start-btn');
+    if(selectedIndices.length > 0) { btn.classList.add('active'); btn.innerText = "出撃開始！"; }
+    else { btn.classList.remove('active'); btn.innerText = "キャラを選んでください"; }
+}
+
+// 編成プレビュー: 選択メンバーが歩くミニアニメ
+let previewRaf = 0;
+function startPreview() { cancelAnimationFrame(previewRaf); previewRaf = requestAnimationFrame(drawPreview); }
+function stopPreview() { cancelAnimationFrame(previewRaf); }
+function drawPreview(ts) {
+    preCtx.fillStyle = "#000"; preCtx.fillRect(0, 0, 400, 60);
+    preCtx.strokeStyle = "#1e1e1e"; preCtx.lineWidth = 1;
+    const off = 40 - (ts / 30) % 40;
+    for(let x = off; x < 400; x += 40) { preCtx.beginPath(); preCtx.moveTo(x, 0); preCtx.lineTo(x, 60); preCtx.stroke(); }
+    preCtx.textAlign = "center";
+    if(selectedIndices.length === 0) {
+        preCtx.fillStyle = "#555"; preCtx.font = "12px sans-serif";
+        preCtx.fillText("メンバーを選択してください", 200, 35);
+    } else {
+        selectedIndices.forEach((ci, k) => {
+            const c = CHAR_DEFS[ci];
+            const bounce = Math.abs(Math.sin(ts / 150 + k * 1.3)) * -6;
+            preCtx.font = "28px Arial";
+            preCtx.fillStyle = "#eee";
+            preCtx.fillText(c.e, 50 + k * 55, 45 + bounce);
+            if(k < selectedIndices.length - 1) {   // 継承の流れる向き
+                preCtx.fillStyle = "#666"; preCtx.font = "12px Arial";
+                preCtx.fillText("▶", 78 + k * 55, 33);
+            }
+        });
+    }
+    previewRaf = requestAnimationFrame(drawPreview);
+}
+
+// ---------------- ラン状態 ----------------
+let party = [], activeIdx = 0;
+let worldX = 0, worldY = 0, frame = 0;
+let isOver = false, inGame = false, paused = false;
+let enemies = [], props = [], bullets = [], enemyBullets = [], drops = [], floatingTexts = [];
+let killCount = 0, propCount = 0, sessionMoney = 0;
+let sessionScore = 0, maxMult = 1, bossKills = 0, ravagedThisCycle = false;
+let bloodTimer = 0, invulnTimer = 0, spawnTimer = 0, switchTimer = 0;
+let pendingShots = [];
+let burstFx = null;
+let devices = [], burstCd = 0, keyBurstHeld = false;
+let boss = null;
+let knockVec = {x:0, y:0};
+let deliveries = [], ecBought = {};
+let runMods = null;
+let soloAtk = 1, soloSpd = 1, soloMult = 0;
+let missions = [];
+let missionDoneCount = {};
+
+const canvas = document.getElementById('mainCanvas'), ctx = canvas.getContext('2d');
+const preCanvas = document.getElementById('previewCanvas'), preCtx = preCanvas.getContext('2d');
+const joyBase = document.getElementById('joystick-base'), joyStick = document.getElementById('joystick-stick');
+
+function fitCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+
+function tryStart() {
+    if(selectedIndices.length === 0) return;
+    party = selectedIndices.map(i => ({
+        ...CHAR_DEFS[i], sex: 0, dead: false, stun: 0,
+        white: 0, black: 0,
+        heartMax: CHAR_DEFS[i].heartMax || CONFIG.HEART_MAX_DEFAULT,
+        chargeBuffTimer: 0,
+        inhTrait: null, inhTimer: 0,
+        atk: 1.0,
+        spd: CHAR_DEFS[i].spd,
+        cool: CHAR_DEFS[i].cool,
+        range: 1.0 * (CHAR_DEFS[i].rangeMul || 1)
+    }));
+    // 少数精鋭ボーナス
+    const empty = 4 - party.length;
+    soloAtk = 1 + empty * CONFIG.SOLO_ATK;
+    soloSpd = 1 + empty * CONFIG.SOLO_SPD;
+    soloMult = empty * CONFIG.SOLO_MULT;
+    stopPreview();
+    resetRun();
+    showScene('game');
+    cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(loop);
+}
+function retryRun() {
+    if(selectedIndices.length === 0) { backToShopFromResult(); return; }
+    tryStart();
+}
+
+function resetRun() {
+    fitCanvas();
+    worldX = CONFIG.STAGE_W / 2; worldY = CONFIG.STAGE_H / 2;
+    frame = 0; sessionMoney = 0; killCount = 0; propCount = 0;
+    sessionScore = 0; maxMult = 1; bossKills = 0; ravagedThisCycle = false;
+    bloodTimer = 0; invulnTimer = 0; spawnTimer = CONFIG.ENEMY_SPAWN_INTERVAL; switchTimer = 0;
+    pendingShots = []; burstFx = null;
+    boss = null; isOver = false; inGame = true; paused = false;
+    deliveries = []; ecBought = {};
+    runMods = { atkMul:1, coolMul:1, rangeMul:1, spdMul:1, pickup:0, burstMul:1, chargeMul:1, guardMul:1, sizeMul:1, bulletSpdMul:1, homing:0 };
+    devices = []; burstCd = 0; keyBurstHeld = false;
+    missions = []; missionDoneCount = {};
+    while(missions.length < 3) addMission();
+    activeIdx = 0; knockVec = {x:0, y:0}; moveVec = {x:0, y:0};
+    gestures.clear(); moveTouchId = null; lastTap = { t: 0, x: 0, y: 0 };
+    lastTime = 0; acc = 0;
+    enemies = []; props = []; drops = []; bullets = []; enemyBullets = []; floatingTexts = [];
+    for(let i=0; i<CONFIG.PROP_COUNT; i++) {
+        let x, y;
+        do { x = Math.random() * CONFIG.STAGE_W; y = Math.random() * CONFIG.STAGE_H; }
+        while(Math.hypot(x - worldX, y - worldY) < CONFIG.PROP_SAFE_DIST);
+        props.push({ x, y, t: Math.random() > 0.5 ? '🌳' : '🪨' });
+    }
+    document.getElementById('boss-hp-bar').style.display = 'none';
+    document.getElementById('ec-scene').style.display = 'none';
+    document.getElementById('mission-scene').style.display = 'none';
+    updateMemberUI();
+}
+
+// ---------------- ジェスチャー入力: ドラッグ=移動 / ダブルタップ=交代 ----------------
+let moveVec = {x:0, y:0}, joyStart = {x:0, y:0};
+let moveTouchId = null;
+let lastTap = { t: 0, x: 0, y: 0 };
+const gestures = new Map();   // id -> {x, y, t, moved}
+
+function isUiTarget(t) { return !!(t && t.closest && (t.closest('#bottom-controls') || t.closest('#menu-btns') || t.closest('.overlay-menu'))); }
+function joyMove(x, y) {
+    const dx = x - joyStart.x, dy = y - joyStart.y;
+    const d = Math.hypot(dx, dy) || 1, m = Math.min(d, CONFIG.JOY_RADIUS);
+    moveVec = { x: (dx/d) * (m/CONFIG.JOY_RADIUS), y: (dy/d) * (m/CONFIG.JOY_RADIUS) };
+    joyStick.style.transform = `translate(${moveVec.x*40}px, ${moveVec.y*40}px)`;
+}
+function joyEnd() { moveVec = {x:0, y:0}; joyBase.style.display = 'none'; joyStick.style.transform = 'translate(0,0)'; }
+
+function gestureStart(id, x, y) {
+    if(!inGame || isOver || paused) return;
+    gestures.set(id, { x, y, t: Date.now(), moved: false });
+}
+function gestureMove(id, x, y) {
+    const g = gestures.get(id);
+    if(!g) return;
+    if(id === moveTouchId) { joyMove(x, y); return; }
+    if(!g.moved && Math.hypot(x - g.x, y - g.y) > CONFIG.DRAG_PX) {
+        g.moved = true;
+        if(moveTouchId === null) {
+            moveTouchId = id;
+            joyStart = { x: g.x, y: g.y };
+            joyBase.style.display = 'block';
+            joyMove(x, y);
+        }
+    }
+}
+function gestureEnd(id) {
+    const g = gestures.get(id);
+    gestures.delete(id);
+    if(id === moveTouchId) { moveTouchId = null; joyEnd(); return; }
+    if(!g || !inGame || isOver || paused || g.moved) return;
+    // 単タップ(TAP_MS未満で離す)=交代 / 長押し(継続)=爆発は update 内で処理済み
+    if(Date.now() - g.t < CONFIG.TAP_MS) switchNext();
+}
+
+window.addEventListener('mousedown', e => { if(!isUiTarget(e.target)) gestureStart('m', e.clientX, e.clientY); });
+window.addEventListener('mousemove', e => gestureMove('m', e.clientX, e.clientY));
+window.addEventListener('mouseup', () => gestureEnd('m'));
+window.addEventListener('touchstart', e => {
+    for(const t of e.changedTouches) {
+        if(isUiTarget(t.target)) continue;
+        gestureStart(t.identifier, t.clientX, t.clientY);
+        if(inGame && !isOver && !paused) e.preventDefault();
+    }
+}, {passive:false});
+window.addEventListener('touchmove', e => {
+    for(const t of e.changedTouches) {
+        if(gestures.has(t.identifier)) { gestureMove(t.identifier, t.clientX, t.clientY); e.preventDefault(); }
+    }
+}, {passive:false});
+const onTouchEnd = e => { for(const t of e.changedTouches) gestureEnd(t.identifier); };
+window.addEventListener('touchend', onTouchEnd);
+window.addEventListener('touchcancel', onTouchEnd);
+// キーボード (開発用): Space=交代 / X長押し=爆発
+window.addEventListener('keydown', e => {
+    if(!inGame || isOver || paused) return;
+    if(e.code === 'Space' && !e.repeat) { switchNext(); e.preventDefault(); }
+    if(e.code === 'KeyX') { keyBurstHeld = true; e.preventDefault(); }
+});
+window.addEventListener('keyup', e => { if(e.code === 'KeyX') keyBurstHeld = false; });
+
+// ---------------- 特性 ----------------
+function hasTrait(p, key) { return p.tr === key || (p.inhTimer > 0 && p.inhTrait === key); }
+
+// ---------------- 交代・爆発・置き土産デバイス ----------------
+function switchNext() {
+    if(isOver || switchTimer > 0) return;
+    if(party.filter(m => !m.dead).length < 2) { pushText("交代できない...", "#888", 25); return; }
+    for(let k = 1; k < party.length; k++) {
+        const i = (activeIdx + k) % party.length;
+        if(!party[i].dead) { doSwitch(i); return; }
+    }
+}
+function switchMember(i) {   // ボタン直接指名
+    if(isOver || switchTimer > 0 || !party[i] || party[i].dead || i === activeIdx) return;
+    doSwitch(i);
+}
+function doSwitch(i) {
+    const out = party[activeIdx];
+    // 白♡を抱えたまま交代すると得: キャラ個性で「継承」か「置き土産」
+    if(!out.dead && out.white > 0) {
+        if(out.switchType === 'inherit') {
+            const inM = party[i];
+            inM.inhTrait = out.tr;
+            inM.inhTimer = CONFIG.INHERIT_TIME + out.white * 60;
+            pushText(`特性継承: ${TRAITS[out.tr].n}！`, TRAITS[out.tr].c, 55, -85);
+        } else {   // 'device' = 置き土産 (その場に残って白♡を撃ち尽くす)
+            spawnDevice(out);
+            pushText("置き土産！自動で撃ち続ける", "#ff6", 45, -85);
+        }
+        out.white = 0; out.stun = 30;
+        missionEvent('maxswitch');
+    }
+    activeIdx = i;
+    switchTimer = CONFIG.SWITCH_COOLDOWN;
+    updateMemberUI();
+}
+function spawnDevice(p) {
+    devices.push({
+        e: p.e, x: worldX, y: worldY,
+        left: p.white, type: p.burstType || 'attack',
+        dmg: CONFIG.BURST_DMG * effAtk(p),
+        radius: CONFIG.BURST_RADIUS * runMods.burstMul,
+        timer: CONFIG.DEVICE_BURST_INTERVAL
+    });
+}
+function updateDevices() {
+    devices.forEach(d => {
+        if(--d.timer > 0) return;
+        d.timer = CONFIG.DEVICE_BURST_INTERVAL;
+        doBurstAt(d.x, d.y, d.dmg, d.radius, "#fa0");   // 攻撃型: その場で範囲攻撃
+        if(--d.left <= 0) d.dead = true;
+    });
+    devices = devices.filter(d => !d.dead);
+}
+// 長押しで発動する爆発 (白♡1消費)。使うほどチャージ加速=連続絶頂
+function tryBurst(p) {
+    if(isOver || p.dead || p.stun > 0 || burstCd > 0 || p.white <= 0) return;
+    p.white--;
+    burstCd = CONFIG.BURST_INTERVAL;
+    p.chargeBuffTimer = CONFIG.BURST_CHARGE_BUFF;
+    doBurstAt(worldX, worldY, CONFIG.BURST_DMG * effAtk(p), CONFIG.BURST_RADIUS * runMods.burstMul, "#f0f");
+    addScore(CONFIG.BURST_SCORE);
+    updateMemberUI();
+}
+function doBurstAt(x, y, dmg, radius, color) {
+    enemies.forEach(en => { if(Math.hypot(en.x - x, en.y - y) < radius) en.hp -= dmg; });
+    if(boss && Math.hypot(boss.x - x, boss.y - y) < radius) boss.hp -= dmg;
+    enemyBullets.forEach(eb => { if(Math.hypot(eb.x - x, eb.y - y) < radius) eb.dead = true; });
+    burstFx = { x, y, r: radius, l: 20, maxL: 20, c: color };
+}
+
+// ---------------- 快感ゲージ → 2色ハート ----------------
+// 自力で100 → 白♡(爆発の弾薬)。敵に100 → 黒♡(篭絡・恒久デバフ)。全♡が黒で離脱。
+function addSex(p, amount, fromEnemy) {
+    if(isOver || p.dead) return;
+    if(fromEnemy) {
+        if(invulnTimer > 0) return;
+        amount *= (1 - saveData.upgrades.resist * CONFIG.RESIST_GUARD) * runMods.guardMul;
+    } else if(p.white + p.black >= p.heartMax) {
+        p.sex = 100; return;   // ♡満杯: 自力チャージ不可 (爆発で吐け)
+    }
+    p.sex += amount;
+    if(p.sex >= 100) { p.sex = 0; gainHeart(p, fromEnemy); }
+}
+function gainHeart(p, fromEnemy) {
+    if(fromEnemy) {
+        if(p.white + p.black >= p.heartMax) {
+            if(p.white > 0) { p.white--; p.black++; pushText("白♡が黒く染まる…", "#c6c", 40, -60); }
+        } else {
+            p.black++; pushText("篭絡…黒♡+1", "#c6c", 40, -60);
+        }
+        if(p.black >= p.heartMax) { ravage(p); return; }
+    } else {
+        if(p.white + p.black >= p.heartMax) { p.sex = 100; return; }
+        p.white++; pushText("♡+1 長押しで爆発", "#ff6", 32, -50);
+    }
+    updateMemberUI();
+}
+function ravage(p) {
+    p.dead = true; p.sex = 0; p.white = 0;
+    ravagedThisCycle = true;
+    pushText(`${p.e} 全♡が黒く…蹂躙され離脱`, "#f33", 80, -70);
+    const aliveIdx = party.findIndex(m => !m.dead);
+    if(aliveIdx === -1) { endGame(); return; }
+    if(party[activeIdx].dead) {
+        activeIdx = aliveIdx;
+        invulnTimer = Math.max(invulnTimer, CONFIG.RAVAGE_INVULN);   // 救済の無敵
+    }
+    updateMemberUI();
+}
+
+// ---------------- ミッション ----------------
+function addMission() {
+    const activeIds = missions.map(m => m.def.id);
+    const pool = MISSION_DEFS.filter(d => !activeIds.includes(d.id));
+    if(pool.length === 0) return;
+    const def = pool[Math.floor(Math.random() * pool.length)];
+    const times = missionDoneCount[def.id] || 0;
+    const n = Math.ceil(def.n * Math.pow(1.5, times));
+    missions.push({ def, n, prog: 0, startF: frame });
+}
+function missionEvent(id) {
+    missions.forEach(m => { if(m.def.id === id) m.prog++; });
+}
+function updateMissions() {
+    missions.forEach(m => { if(m.def.id === 'survive') m.prog = Math.floor((frame - m.startF) / 60); });
+    for(let i = missions.length - 1; i >= 0; i--) {
+        const m = missions[i];
+        if(m.prog >= m.n) {
+            missionDoneCount[m.def.id] = (missionDoneCount[m.def.id] || 0) + 1;
+            if(m.def.money) { sessionMoney += m.def.money; pushText(`ミッション達成 +¥${m.def.money}`, "#0ff", 60, -95); }
+            else { addScore(m.def.score); pushText(`ミッション達成 +score`, "#0ff", 60, -95); }
+            missions.splice(i, 1);
+        }
+    }
+    while(missions.length < 3) addMission();
+}
+
+// ---------------- EC(自発ショップ) + 宅配ドロップ ----------------
+// 好きな時に🛒で開く(その間だけ停止)。注文品は数秒後にマップへ📦投下→拾って発動。
+function ecPrice(it) { return Math.round(it.price * Math.pow(CONFIG.EC_PRICE_GROWTH, ecBought[it.id] || 0)); }
+function openEC() {
+    if(isOver || paused) return;
+    paused = true;
+    moveTouchId = null; gestures.clear(); joyEnd();
+    renderEC();
+    document.getElementById('ec-scene').style.display = 'flex';
+}
+function renderEC() {
+    document.getElementById('ec-money').innerText = `所持 ¥${sessionMoney.toLocaleString()}`;
+    const pool = ITEM_DEFS.filter(it => !it.cond || it.cond());
+    document.getElementById('ec-list').innerHTML = pool.map(it => {
+        const price = ecPrice(it);
+        const can = sessionMoney >= price;
+        return `<div class="draft-card${can ? '' : ' ec-poor'}" onclick="buyEC('${it.id}')">
+            <div class="draft-name">📦 ${it.n}<span style="float:right; color:${can ? '#0f8' : '#c66'}">¥${price.toLocaleString()}</span></div>
+            <div class="draft-desc">${it.d}</div></div>`;
+    }).join('');
+}
+function buyEC(id) {
+    const it = ITEM_DEFS.find(x => x.id === id);
+    if(!it) return;
+    const price = ecPrice(it);
+    if(sessionMoney < price) { pushText("お金が足りない", "#f88", 25); return; }
+    sessionMoney -= price;
+    ecBought[id] = (ecBought[id] || 0) + 1;
+    deliveries.push({ id, timer: CONFIG.DELIVERY_DELAY });
+    pushText("注文完了！まもなく届く📦", "#0ff", 40, -80);
+    renderEC();
+}
+function closeEC() {
+    document.getElementById('ec-scene').style.display = 'none';
+    paused = false;
+}
+function updateDeliveries() {
+    for(let i = deliveries.length - 1; i >= 0; i--) {
+        if(--deliveries[i].timer > 0) continue;
+        const id = deliveries[i].id;
+        deliveries.splice(i, 1);
+        const a = Math.random() * Math.PI * 2;
+        const dist = CONFIG.DELIVERY_DIST_MIN + Math.random() * (CONFIG.DELIVERY_DIST_MAX - CONFIG.DELIVERY_DIST_MIN);
+        const M = CONFIG.WALL_MARGIN;
+        const x = Math.max(M, Math.min(CONFIG.STAGE_W - M, worldX + Math.cos(a) * dist));
+        const y = Math.max(M, Math.min(CONFIG.STAGE_H - M, worldY + Math.sin(a) * dist));
+        drops.push({ x, y, t: 'package', itemId: id, val: 0 });
+        pushText("📦 届いた！拾いに行け", "#0ff", 40, -90);
+    }
+}
+// ---------------- ミッション (メニューで開く) ----------------
+function openMissions() {
+    if(isOver || paused) return;
+    paused = true;
+    moveTouchId = null; gestures.clear(); joyEnd();
+    const norma = CONFIG.BOSS_NORMA * (bossKills + 1);
+    const head = boss ? `BOSSを倒せ！` : `NEXT BOSS ${killCount}/${norma}`;
+    document.getElementById('mission-body').innerHTML = `<div style="color:#f66; margin-bottom:10px;">${head}</div>` +
+        missions.map(m => `<div style="margin:8px 0;">・${m.def.txt(m.n)}　<b>${Math.min(m.prog, m.n)}/${m.n}</b></div>`).join('');
+    document.getElementById('mission-scene').style.display = 'flex';
+}
+function closeMissions() {
+    document.getElementById('mission-scene').style.display = 'none';
+    paused = false;
+}
+
+// ---------------- スコア ----------------
+function riskMult() {
+    const p = party[activeIdx];
+    return 1 + (p.white + p.black) * 0.15 + p.sex / 200 + (bloodTimer > 0 ? CONFIG.BLOOD_SCORE_BONUS : 0) + soloMult + (hasTrait(p, 'kou') ? 0.2 : 0);
+}
+function addScore(base) { sessionScore += Math.round(base * riskMult()); }
+
+// ---------------- 実効ステータス (特性・宅配・少数精鋭を合成) ----------------
+function effAtk(p) { return p.atk * runMods.atkMul * soloAtk * (hasTrait(p, 'gou') ? 1.4 : 1); }
+function effSpd(p) { return p.spd * runMods.spdMul * soloSpd * (hasTrait(p, 'shun') ? 1.25 : 1); }
+function effPickup(p) { return CONFIG.PICKUP_RADIUS + runMods.pickup + (hasTrait(p, 'kin') ? 20 : 0); }
+
+// ---------------- メインループ ----------------
+let rafId = 0, lastTime = 0, acc = 0;
+function loop(ts) {
+    if(isOver) return;
+    if(!lastTime) lastTime = ts;
+    acc += Math.min(ts - lastTime, CONFIG.MAX_FRAME_MS);
+    lastTime = ts;
+    while(acc >= CONFIG.STEP_MS) {
+        if(!paused) update();
+        acc -= CONFIG.STEP_MS;
+        if(isOver) return;
+    }
+    draw();
+    updateHUD();
+    rafId = requestAnimationFrame(loop);
+}
+
+function update() {
+    frame++;
+    const p = party[activeIdx];
+    party.forEach((m, i) => {
+        if(m.stun > 0) m.stun--;
+        if(m.inhTimer > 0) m.inhTimer--;
+        if(m.chargeBuffTimer > 0) m.chargeBuffTimer--;
+        if(i !== activeIdx && !m.dead && m.sex > 0) m.sex = Math.max(0, m.sex - CONFIG.BENCH_SEX_REGEN);
+    });
+    if(bloodTimer > 0) bloodTimer--;
+    if(invulnTimer > 0) invulnTimer--;
+    if(switchTimer > 0) switchTimer--;
+    if(burstCd > 0) burstCd--;
+    if(burstFx && --burstFx.l <= 0) burstFx = null;
+    updatePendingShots();
+    updateDevices();
+    maxMult = Math.max(maxMult, riskMult());
+    // 長押し中=爆発(白♡消費) / 停止=チャージ。マユゥは白♡が多い&爆発直後ほどチャージ加速(雪だるま)
+    const holdingBurst = keyBurstHeld || [...gestures.entries()].some(([id, g]) => id !== moveTouchId && !g.moved && Date.now() - g.t >= CONFIG.TAP_MS);
+    if(holdingBurst) tryBurst(p);
+    const standing = moveVec.x === 0 && moveVec.y === 0 && Math.hypot(knockVec.x, knockVec.y) < 0.5;
+    if(standing) {
+        let rate = CONFIG.STAND_CHARGE * runMods.chargeMul;
+        if(p.chargeAccel) rate *= (1 + p.white * CONFIG.CHARGE_PER_HEART);
+        if(p.chargeBuffTimer > 0) rate *= CONFIG.BURST_CHARGE_BUFF_MUL;
+        addSex(p, rate, false);
+    }
+    if(frame % CONFIG.SURVIVAL_TICK === 0) {
+        const bonus = CONFIG.SURVIVAL_BASE * (Math.floor(frame / 3600) + 1);
+        addScore(bonus);
+        pushText(`survive +${bonus}`, "#8ff", 25, -80);
+    }
+    updatePlayer(p);
+    updateAttack(p);
+    updateBullets();
+    spawnEnemies();
+    replenishProps();
+    updateEnemies(p);
+    updateBoss(p);
+    if(isOver) return;
+    updateEnemyBullets(p);
+    updateDrops(p);
+    updateMissions();
+    updateDeliveries();
+    floatingTexts.forEach(ft => { ft.y--; if(--ft.l <= 0) ft.dead = true; });
+    bullets = bullets.filter(b => !b.dead);
+    enemyBullets = enemyBullets.filter(b => !b.dead);
+    enemies = enemies.filter(e => !e.dead);
+    props = props.filter(pr => !pr.dead);
+    drops = drops.filter(d => !d.dead);
+    floatingTexts = floatingTexts.filter(t => !t.dead);
+}
+
+function updatePlayer(p) {
+    const heartSlow = Math.max(CONFIG.HEART_SLOW_MIN, 1 - (p.white + p.black) * CONFIG.HEART_SLOW_PER);
+    const spd = effSpd(p) * heartSlow;
+    const nx = worldX + moveVec.x * spd + knockVec.x;
+    const ny = worldY + moveVec.y * spd + knockVec.y;
+    knockVec.x *= 0.9; knockVec.y *= 0.9;
+    const B = CONFIG.PROP_BLOCK, M = CONFIG.WALL_MARGIN;
+    const blockX = props.some(pr => Math.abs(nx - pr.x) < B && Math.abs(worldY - pr.y) < B);
+    const blockY = props.some(pr => Math.abs(worldX - pr.x) < B && Math.abs(ny - pr.y) < B);
+    if(!blockX) worldX = Math.max(M, Math.min(CONFIG.STAGE_W - M, nx));
+    if(!blockY) worldY = Math.max(M, Math.min(CONFIG.STAGE_H - M, ny));
+}
+
+function updateAttack(p) {
+    if(p.stun > 0) return;
+    const renMul = hasTrait(p, 'ren') ? 0.75 : 1;
+    const cool = Math.max(5, Math.floor(p.cool * runMods.coolMul * renMul));
+    if(frame % cool !== 0) return;
+    let target = null, best = Infinity;
+    const scan = boss ? [boss] : enemies;
+    scan.forEach(t => {
+        const d = Math.hypot(t.x - worldX, t.y - worldY);
+        if(d < best) { best = d; target = t; }
+    });
+    let vx = 1, vy = 0;
+    if(target && best < CONFIG.TARGET_RANGE) { vx = target.x - worldX; vy = target.y - worldY; }
+    else if(moveVec.x !== 0 || moveVec.y !== 0) { vx = moveVec.x; vy = moveVec.y; }
+    // キャラ固有弾 (第1弾: 丑・寅・午・酉)
+    switch(p.id) {
+        case 1:
+            fireBullet(p, vx, vy, { sizeMul: 2, spdMul: 0.7, dmgMul: 2 });
+            break;
+        case 2: {
+            const a = Math.atan2(vy, vx);
+            fireBullet(p, Math.cos(a - 0.15), Math.sin(a - 0.15));
+            fireBullet(p, Math.cos(a + 0.15), Math.sin(a + 0.15));
+            break;
+        }
+        case 6:
+            fireBullet(p, vx, vy);
+            if(moveVec.x !== 0 || moveVec.y !== 0) fireBullet(p, moveVec.x, moveVec.y);
+            break;
+        case 9:
+            fireBullet(p, vx, vy);
+            pendingShots.push({ delay: 6, p, vx, vy }, { delay: 12, p, vx, vy });
+            break;
+        default:
+            fireBullet(p, vx, vy);
+    }
+}
+
+function fireBullet(p, vx, vy, opts = {}) {
+    const d = Math.hypot(vx, vy) || 1;
+    const spd = CONFIG.BULLET_SPEED * (opts.spdMul || 1) * runMods.bulletSpdMul;
+    const range = p.range * runMods.rangeMul;
+    bullets.push({
+        x: worldX, y: worldY,
+        vx: vx/d * spd, vy: vy/d * spd,
+        l: CONFIG.BULLET_LIFE * range, size: CONFIG.BULLET_SIZE * range * (opts.sizeMul || 1) * runMods.sizeMul,
+        dmg: 10 * effAtk(p) * (opts.dmgMul || 1)
+    });
+}
+
+function updatePendingShots() {
+    pendingShots.forEach(s => { if(--s.delay <= 0) fireBullet(s.p, s.vx, s.vy); });
+    pendingShots = pendingShots.filter(s => s.delay > 0);
+}
+
+function updateBullets() {
+    const scan = boss ? [boss] : enemies;
+    bullets.forEach(b => {
+        if(runMods.homing > 0 && scan.length) {
+            let tx, ty, bd = Infinity;
+            scan.forEach(e => { const d = Math.hypot(e.x - b.x, e.y - b.y); if(d < bd) { bd = d; tx = e.x; ty = e.y; } });
+            if(tx !== undefined) {
+                const cur = Math.atan2(b.vy, b.vx);
+                let da = Math.atan2(ty - b.y, tx - b.x) - cur;
+                while(da > Math.PI) da -= Math.PI * 2; while(da < -Math.PI) da += Math.PI * 2;
+                const turn = CONFIG.HOMING_TURN * runMods.homing;
+                const na = cur + Math.max(-turn, Math.min(turn, da));
+                const sp = Math.hypot(b.vx, b.vy);
+                b.vx = Math.cos(na) * sp; b.vy = Math.sin(na) * sp;
+            }
+        }
+        b.x += b.vx; b.y += b.vy;
+        if(props.some(pr => Math.abs(b.x - pr.x) < 28 && Math.abs(b.y - pr.y) < 28)) b.dead = true;   // 障害物で遮蔽
+        if(--b.l <= 0) b.dead = true;
+    });
+}
+
+function replenishProps() {
+    if(frame % CONFIG.PROP_RESPAWN_INTERVAL !== 0 || props.length >= CONFIG.PROP_COUNT) return;
+    let x, y, tries = 0;
+    do { x = Math.random() * CONFIG.STAGE_W; y = Math.random() * CONFIG.STAGE_H; }
+    while(Math.hypot(x - worldX, y - worldY) < CONFIG.PROP_RESPAWN_DIST && ++tries < 20);
+    props.push({ x, y, t: Math.random() > 0.5 ? '🌳' : '🪨' });
+}
+
+function spawnEnemies() {
+    if(boss) return;
+    if(--spawnTimer > 0) return;
+    const t = frame / 60;
+    spawnTimer = Math.max(CONFIG.SPAWN_MIN_INTERVAL, CONFIG.ENEMY_SPAWN_INTERVAL - Math.floor(t / 5));
+    const maxEnemies = Math.min(CONFIG.ENEMY_MAX_CAP, CONFIG.ENEMY_MAX + Math.floor(t / 45));
+    if(enemies.length >= maxEnemies) return;
+    const hpScale = 1 + (t / 60) * 0.5;
+    const type = pickEnemyType();
+    const count = Math.min(type.pack[0] + Math.floor(Math.random() * (type.pack[1] - type.pack[0] + 1)), maxEnemies - enemies.length);
+    const angle = Math.random() * Math.PI * 2;
+    const M = CONFIG.WALL_MARGIN;
+    for(let i = 0; i < count; i++) {
+        const a = angle + (Math.random() - 0.5) * 0.6;
+        enemies.push({
+            ...type,
+            x: Math.max(M, Math.min(CONFIG.STAGE_W - M, worldX + Math.cos(a) * (CONFIG.ENEMY_SPAWN_DIST + Math.random() * 80))),
+            y: Math.max(M, Math.min(CONFIG.STAGE_H - M, worldY + Math.sin(a) * (CONFIG.ENEMY_SPAWN_DIST + Math.random() * 80))),
+            hp: Math.round(type.hp * hpScale), maxHp: Math.round(type.hp * hpScale),
+            phase: Math.floor(Math.random() * 600)
+        });
+    }
+}
+function pickEnemyType() {
+    const total = ENEMY_TYPES.reduce((s, t) => s + t.weight, 0);
+    let r = Math.random() * total;
+    for(const t of ENEMY_TYPES) { if((r -= t.weight) < 0) return t; }
+    return ENEMY_TYPES[0];
+}
+
+function updateEnemies(p) {
+    const B = CONFIG.PROP_BLOCK;
+    enemies.forEach(en => {
+        const dx = worldX - en.x, dy = worldY - en.y, dist = Math.hypot(dx, dy) || 1;
+        // 敵は弾を撃たない。接触と包囲の圧のみ。障害物は通れない(隠れられる)
+        let mvx = dx/dist * en.spd, mvy = dy/dist * en.spd;
+        if(en.type === 1) {
+            const w = Math.sin((frame + en.phase) * 0.08) * 2;
+            mvx += (-dy/dist) * w; mvy += (dx/dist) * w;
+        }
+        const nx = en.x + mvx, ny = en.y + mvy;
+        if(!props.some(pr => Math.abs(nx - pr.x) < B && Math.abs(en.y - pr.y) < B)) en.x = nx;
+        if(!props.some(pr => Math.abs(en.x - pr.x) < B && Math.abs(ny - pr.y) < B)) en.y = ny;
+
+        if(invulnTimer <= 0 && dist < CONFIG.CONTACT_DIST && frame % CONFIG.CONTACT_INTERVAL === 0) {
+            knockVec = { x:-dx/dist*CONFIG.CONTACT_KNOCK, y:-dy/dist*CONFIG.CONTACT_KNOCK };
+            pushText("ああっ", "#f0f", 30);
+            addSex(p, CONFIG.CONTACT_SEX, true);
+        }
+        bullets.forEach(b => {
+            if(!b.dead && Math.hypot(b.x - en.x, b.y - en.y) < 30 + b.size) { en.hp -= b.dmg; b.dead = true; }
+        });
+        if(en.hp <= 0 && !en.dead) {
+            en.dead = true; killCount++;
+            addScore(en.score);
+            missionEvent('kill_any');
+            if(en.type === 0) missionEvent('kill_wolf');
+            if(hasTrait(p, 'kyu')) p.sex = Math.max(0, p.sex - 2);   // 吸収: 撃破で鎮まる
+            const dropRate = CONFIG.DROP_MONEY_RATE + (hasTrait(p, 'kin') ? 0.15 : 0);   // 金運
+            const r = Math.random();
+            if(r < dropRate) drops.push({ x:en.x, y:en.y, t:'money', val: CONFIG.ENEMY_DROP_VAL });
+            else if(r < dropRate + CONFIG.DROP_BLOOD_RATE) drops.push({ x:en.x, y:en.y, t:'blood', val:0 });
+        }
+    });
+}
+
+function updateBoss(p) {
+    const norma = CONFIG.BOSS_NORMA * (bossKills + 1);
+    if(!boss && (killCount + propCount) >= norma) {
+        const M = 60;
+        const hpScale = 1 + (frame / 60 / 60) * 0.5;   // ザコと同じ時間スケール ≒ 常に約10倍のタフさ
+        const hp = Math.round(CONFIG.BOSS_HP * (1 + CONFIG.BOSS_HP_GROWTH * bossKills) * hpScale);
+        boss = {
+            x: Math.max(M, Math.min(CONFIG.STAGE_W - M, worldX)),
+            y: Math.max(M, Math.min(CONFIG.STAGE_H - M, worldY - 400)),
+            hp, maxHp: hp
+        };
+        pushText("中ボス出現！タフな金づるだ", "#f80", 80, -100);
+        document.getElementById('boss-hp-bar').style.display = 'block';
+    }
+    if(!boss) return;
+    const dx = worldX - boss.x, dy = worldY - boss.y, dist = Math.hypot(dx, dy) || 1;
+    boss.x += dx/dist * CONFIG.BOSS_SPD; boss.y += dy/dist * CONFIG.BOSS_SPD;
+    // ボスも弾を撃たない。代わりに手下を呼んで包囲圧をかける
+    if(frame % CONFIG.BOSS_SUMMON_INTERVAL === 0 && enemies.length < CONFIG.ENEMY_MAX_CAP) {
+        const type = ENEMY_TYPES[Math.random() < 0.5 ? 0 : 1];
+        const n = 2 + (bossKills >= 1 ? 1 : 0);
+        const hpScale = 1 + (frame / 60 / 60) * 0.5;
+        for(let k=0; k<n; k++) {
+            const a = Math.random() * Math.PI * 2;
+            enemies.push({ ...type,
+                x: boss.x + Math.cos(a) * 70, y: boss.y + Math.sin(a) * 70,
+                hp: Math.round(type.hp * hpScale), maxHp: Math.round(type.hp * hpScale),
+                phase: Math.floor(Math.random() * 600) });
+        }
+        pushText("手下を呼んだ！", "#f66", 30, -90);
+    }
+    if(invulnTimer <= 0 && dist < CONFIG.BOSS_CONTACT_DIST && frame % 10 === 0) {
+        knockVec = { x:-dx/dist*CONFIG.BOSS_CONTACT_KNOCK, y:-dy/dist*CONFIG.BOSS_CONTACT_KNOCK };
+        pushText("ぐあぁっ！", "#f00", 40, -50);
+        addSex(p, CONFIG.BOSS_CONTACT_SEX, true);
+    }
+    bullets.forEach(b => {
+        if(!b.dead && Math.hypot(b.x - boss.x, b.y - boss.y) < 60) { boss.hp -= b.dmg; b.dead = true; }
+    });
+    if(boss.hp <= 0) {
+        for(let k=0; k<18; k++) drops.push({ x:worldX+(Math.random()-0.5)*140, y:worldY+(Math.random()-0.5)*140, t:'money', val: CONFIG.BOSS_DROP_VAL });
+        addScore(CONFIG.SCORE_BOSS);
+        if(!ravagedThisCycle) { addScore(CONFIG.SCORE_PERFECT); pushText("PERFECT BONUS!", "#ff0", 80, -130); }
+        ravagedThisCycle = false;
+        bossKills++;
+        boss = null;
+        document.getElementById('boss-hp-bar').style.display = 'none';
+        invulnTimer = CONFIG.KILL_INVULN;
+        pushText("中ボス撃破！💰大量ドロップ", "#0ff", 90, -100);
+    }
+}
+
+function updateEnemyBullets(p) {
+    enemyBullets.forEach(eb => {
+        eb.x += eb.vx; eb.y += eb.vy;
+        if(invulnTimer <= 0 && !eb.dead && Math.hypot(eb.x - worldX, eb.y - worldY) < 15 + eb.size) {
+            eb.dead = true;
+            pushText("あっ", "#f0f", 30);
+            addSex(p, CONFIG.ENEMY_BULLET_SEX, true);
+        }
+        if(--eb.l <= 0) eb.dead = true;
+    });
+}
+
+function updateDrops(p) {
+    const pickupR = effPickup(p);
+    drops.forEach(d => {
+        if(d.dead || Math.hypot(d.x - worldX, d.y - worldY) >= pickupR) return;
+        d.dead = true;
+        if(d.t === 'money') {
+            sessionMoney += d.val;
+            missionEvent('money');
+            pushText(`+¥${d.val}`, "#ff0", 30, -60);
+        } else if(d.t === 'package') {
+            const it = ITEM_DEFS.find(x => x.id === d.itemId);
+            if(it) { it.f(); pushText(`${it.n} 発動！`, "#ffd700", 50, -70); }
+        } else {
+            // 🩸: 快感チャージ (拾って白♡を貯められる) ＋ 20秒間スコア倍率+0.3
+            addSex(p, CONFIG.BLOOD_SEX_GAIN, false);
+            bloodTimer = CONFIG.BLOOD_SCORE_TIME;
+            pushText("快感チャージ +♡", "#f0f", 30, -60);
+        }
+    });
+}
+
+function pushText(t, c, l, dy = -40) {
+    floatingTexts.push({ x: canvas.width/2, y: canvas.height/2 + dy, t, c, l });
+}
+
+// ---------------- 描画 ----------------
+function draw() {
+    const cx = canvas.width/2, cy = canvas.height/2;
+    ctx.fillStyle = "#111"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = "#222"; ctx.lineWidth = 2;
+    for(let i=0; i<=CONFIG.STAGE_W; i+=CONFIG.GRID_SIZE) {
+        ctx.beginPath(); ctx.moveTo(i-worldX+cx, -worldY+cy); ctx.lineTo(i-worldX+cx, CONFIG.STAGE_H-worldY+cy); ctx.stroke();
+    }
+    for(let i=0; i<=CONFIG.STAGE_H; i+=CONFIG.GRID_SIZE) {
+        ctx.beginPath(); ctx.moveTo(-worldX+cx, i-worldY+cy); ctx.lineTo(CONFIG.STAGE_W-worldX+cx, i-worldY+cy); ctx.stroke();
+    }
+    ctx.strokeStyle = "#f0f"; ctx.lineWidth = 4;
+    ctx.strokeRect(-worldX+cx, -worldY+cy, CONFIG.STAGE_W, CONFIG.STAGE_H);
+
+    ctx.textAlign = "center";
+    ctx.font = "30px Arial";
+    props.forEach(pr => ctx.fillText(pr.t, pr.x-worldX+cx, pr.y-worldY+cy+10));
+    const bob = Math.sin(frame * 0.1) * 5;
+    ctx.font = "24px Arial";
+    drops.forEach(d => ctx.fillText(d.t === 'money' ? '💰' : (d.t === 'package' ? '📦' : '🩸'), d.x-worldX+cx, d.y-worldY+cy+bob));
+    ctx.fillStyle = "#0ff";
+    bullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x-worldX+cx, b.y-worldY+cy, b.size, 0, 7); ctx.fill(); });
+    ctx.fillStyle = "#eee"; ctx.font = "30px Arial";
+    enemies.forEach(en => ctx.fillText(en.icon, en.x-worldX+cx, en.y-worldY+cy+10));
+    if(boss) { ctx.font = "80px Arial"; ctx.fillText("👹", boss.x-worldX+cx, boss.y-worldY+cy+30); }
+    ctx.fillStyle = "#ff3333";
+    enemyBullets.forEach(eb => { ctx.beginPath(); ctx.arc(eb.x-worldX+cx, eb.y-worldY+cy, eb.size, 0, 7); ctx.fill(); });
+
+    // 置き土産デバイス (その場に残って撃ち続ける)
+    devices.forEach(d => {
+        const dx = d.x - worldX + cx, dy = d.y - worldY + cy;
+        ctx.globalAlpha = 0.55; ctx.font = "40px Arial";
+        ctx.fillText(d.e, dx, dy + 12);
+        ctx.globalAlpha = 0.3 + 0.3 * Math.abs(Math.sin(frame * 0.2));
+        ctx.strokeStyle = "#fa0"; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(dx, dy, 30, 0, 7); ctx.stroke();
+        ctx.globalAlpha = 1;
+    });
+    if(burstFx) {
+        const prog = 1 - burstFx.l / burstFx.maxL;
+        const bx = (burstFx.x ?? worldX) - worldX + cx, by = (burstFx.y ?? worldY) - worldY + cy;
+        ctx.strokeStyle = burstFx.c; ctx.lineWidth = 6;
+        ctx.globalAlpha = 1 - prog;
+        ctx.beginPath(); ctx.arc(bx, by, burstFx.r * (0.3 + prog * 0.7), 0, 7); ctx.stroke();
+        ctx.globalAlpha = 1;
+    }
+
+    const p = party[activeIdx];
+    // 快感ゲージ = 常時・太いリング (移動中も危機管理できるように)
+    const standing = moveVec.x === 0 && moveVec.y === 0 && Math.hypot(knockVec.x, knockVec.y) < 0.5;
+    ctx.lineWidth = 7;
+    ctx.strokeStyle = "rgba(255,255,255,0.12)";
+    ctx.beginPath(); ctx.arc(cx, cy, 50, 0, 7); ctx.stroke();
+    ctx.strokeStyle = p.sex >= 85 ? "#ff3b3b" : "#ff2ff0";   // 危険域(85%以上)は赤
+    ctx.globalAlpha = standing ? (0.75 + 0.25 * Math.sin(frame * 0.25)) : 0.9;
+    ctx.beginPath(); ctx.arc(cx, cy, 50, -Math.PI/2, -Math.PI/2 + (p.sex/100) * Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = 1;
+    // 白♡を持っていると外側に発光 (長押しで爆発できる合図)
+    if(p.white > 0) {
+        ctx.strokeStyle = "#ff0"; ctx.lineWidth = 3;
+        ctx.globalAlpha = 0.4 + Math.sin(frame * 0.3) * 0.25;
+        ctx.beginPath(); ctx.arc(cx, cy, 61 + Math.sin(frame * 0.15) * 4, 0, 7); ctx.stroke();
+        ctx.globalAlpha = 1;
+    }
+    if(invulnTimer <= 0 || frame % 10 < 5) {
+        ctx.fillStyle = "#eee"; ctx.font = "60px Arial";
+        ctx.fillText(p.stun > 0 ? "😫" : p.e, cx, cy);
+    }
+    // 頭上のハート列 (白=爆発の弾薬 / 黒=篭絡デバフ)
+    if(p.white + p.black > 0) {
+        ctx.font = "16px Arial"; ctx.textAlign = "center";
+        const total = p.white + p.black, startX = cx - (total - 1) * 7;
+        for(let h = 0; h < total; h++) {
+            ctx.fillStyle = h < p.white ? "#ff5" : "#927";
+            ctx.fillText("♥", startX + h * 14, cy - 68);
+        }
+    }
+
+    // 宅配📦の方向を画面端の矢印で示す (画面外にある時)
+    const edge = Math.min(canvas.width, canvas.height) / 2 - 44;
+    drops.forEach(d => {
+        if(d.t !== 'package' || d.dead) return;
+        const sx = d.x - worldX + cx, sy = d.y - worldY + cy;
+        if(sx > 12 && sx < canvas.width - 12 && sy > 12 && sy < canvas.height - 12) return;
+        const ang = Math.atan2(sy - cy, sx - cx);
+        const ex = cx + Math.cos(ang) * edge, ey = cy + Math.sin(ang) * edge;
+        ctx.save(); ctx.translate(ex, ey); ctx.rotate(ang);
+        ctx.fillStyle = "#0ff";
+        ctx.beginPath(); ctx.moveTo(16, 0); ctx.lineTo(-8, -10); ctx.lineTo(-8, 10); ctx.closePath(); ctx.fill();
+        ctx.restore();
+        ctx.fillStyle = "#0ff"; ctx.font = "18px Arial"; ctx.textAlign = "center";
+        ctx.fillText("📦", ex - Math.cos(ang) * 24, ey - Math.sin(ang) * 24 + 6);
+    });
+
+    ctx.font = "bold 20px sans-serif";
+    floatingTexts.forEach(ft => { ctx.fillStyle = ft.c; ctx.fillText(ft.t, ft.x, ft.y); });
+}
+
+// ---------------- HUD ----------------
+function updateHUD() {
+    const p = party[activeIdx];
+    // ハート表示 (白=爆発の弾薬 / 黒=篭絡デバフ / 灰=空き)
+    let hd = '';
+    for(let h = 0; h < p.heartMax; h++) {
+        const col = h < p.white ? '#ff5' : (h < p.white + p.black ? '#c39' : '#444');
+        hd += `<span style="color:${col}">♥</span>`;
+    }
+    document.getElementById('heart-display').innerHTML = hd;
+    document.getElementById('ec-btn-money').innerText = `¥${sessionMoney.toLocaleString()}`;
+    const cheapest = Math.min(...ITEM_DEFS.filter(it => !it.cond || it.cond()).map(ecPrice));
+    document.getElementById('ec-btn').classList.toggle('ready-glow', sessionMoney >= cheapest);
+
+    const mult = riskMult();
+    const sv = document.getElementById('score-val'), sm = document.getElementById('score-mult');
+    sv.innerText = sessionScore.toLocaleString();
+    const glow = mult >= CONFIG.GLOW_MULT;
+    sv.style.color = glow ? '#f0f' : '#fff';
+    sv.style.textShadow = glow ? '0 0 10px #f0f' : 'none';
+    sm.innerText = `x${mult.toFixed(1)}${bloodTimer > 0 ? ' 🩸' : ''}`;
+    sm.style.color = glow ? '#f0f' : '#888';
+
+    const t = Math.floor(frame / 60);
+    const del = deliveries.length ? ` 📦x${deliveries.length}` : '';
+    document.getElementById('time-display').innerText = `⏱ ${Math.floor(t/60)}:${String(t%60).padStart(2,'0')}${del}`;
+    if(boss) document.getElementById('boss-hp').style.width = (boss.hp / boss.maxHp * 100) + "%";
+
+    const btns = document.getElementById('member-btns').children;
+    party.forEach((m, i) => {
+        if(!btns[i]) return;
+        btns[i].classList.toggle('maxed', !m.dead && m.white > 0);
+        btns[i].classList.toggle('danger', !m.dead && m.black > 0);
+        btns[i].querySelector('.face').innerText = m.dead ? '💀' : (m.stun > 0 ? '😫' : m.e);
+        btns[i].querySelector('.mini-gauge').style.width = m.dead ? '0%' : m.sex + '%';
+    });
+}
+
+function updateMemberUI() {
+    document.getElementById('member-btns').innerHTML = party.map((m, i) => {
+        let cls = 'btn-member';
+        if(i === activeIdx) cls += ' active';
+        if(m.dead) cls += ' dead';
+        else { if(m.white > 0) cls += ' maxed'; if(m.black > 0) cls += ' danger'; }
+        return `<div class="${cls}" onclick="switchMember(${i})">` +
+            `<span class="face">${m.dead ? '💀' : m.e}</span><div class="mini-gauge"></div></div>`;
+    }).join('');
+}
+
+// ---------------- リザルト ----------------
+function endGame() {
+    if(isOver) return;
+    isOver = true; inGame = false; paused = false;
+    moveTouchId = null; gestures.clear(); joyEnd();
+    document.getElementById('ec-scene').style.display = 'none';
+    document.getElementById('mission-scene').style.display = 'none';
+    const prevBest = saveData.bestScores.length ? saveData.bestScores[0].score : 0;
+    const isRecord = sessionScore > prevBest;
+    saveData.bestScores.push({ score: sessionScore, date: new Date().toISOString().slice(0, 10), party: party.map(m => m.id) });
+    saveData.bestScores.sort((a, b) => b.score - a.score);
+    saveData.bestScores = saveData.bestScores.slice(0, 10);
+    saveGame();
+    showScene('result');
+    const title = document.getElementById('res-title');
+    title.innerText = isRecord ? "NEW RECORD!!" : "全員蹂躙...敗北";
+    title.style.color = isRecord ? "#ffd700" : "#f0f";
+    document.getElementById('res-score').innerText = `SCORE ${sessionScore.toLocaleString()}`;
+    const t = Math.floor(frame / 60);
+    document.getElementById('res-stats').innerText =
+        `生存時間 ${Math.floor(t/60)}:${String(t%60).padStart(2,'0')}　撃破 ${killCount}　BOSS ${bossKills}\n` +
+        `最大倍率 x${maxMult.toFixed(1)}　自己ベスト ${saveData.bestScores[0].score.toLocaleString()}`;
+    document.getElementById('res-money').innerText = `このランの稼ぎ ¥${sessionMoney.toLocaleString()}`;
+}
+
+// ---------------- 起動 ----------------
+window.onload = () => {
+    loadSave();
+    initSetupGrid();
+    initShop();
+    fitCanvas();
+    showScene('shop');
+};
+window.addEventListener('resize', fitCanvas);
+</script>
+</body>
+</html>
