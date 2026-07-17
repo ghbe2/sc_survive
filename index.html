@@ -34,11 +34,10 @@
         .main-btn { width: 100%; max-width: 300px; padding: 12px; border-radius: 30px; background: #444; color: #aaa; border: none; font-weight: bold; font-size: 16px; margin-top: 10px; }
         .main-btn.active { background: linear-gradient(45deg, #f0f, #80f); color: white; box-shadow: 0 4px 15px rgba(255,0,255,0.4); cursor: pointer; }
 
-        /* EC / ミッション オーバーレイ */
+        /* レベルアップ / ミッション オーバーレイ */
         .overlay-menu { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.9); z-index: 90; text-align: center; padding: 20px; }
         .draft-card { background: #1c1c2e; border: 2px solid #ffd700; border-radius: 10px; padding: 14px; width: 90%; max-width: 340px; margin-bottom: 10px; cursor: pointer; text-align: left; }
         .draft-card:active { transform: scale(0.97); }
-        .draft-card.ec-poor { opacity: 0.5; border-color: #555; }
         .draft-name { font-size: 16px; font-weight: bold; color: #ffd700; }
         .draft-desc { font-size: 12px; color: #aaa; margin-top: 3px; }
 
@@ -75,7 +74,9 @@
         .btn-member .mini-gauge { position: absolute; bottom: 0; left: 0; height: 4px; width: 0%; background: linear-gradient(90deg, #f0f, #ff69b4); }
         #gesture-hint { position: absolute; bottom: 110px; width: 100%; text-align: center; color: rgba(255,255,255,0.35); font-size: 10px; pointer-events: none; }
         #ensemble-banner { position:absolute; inset:0; display:none; align-items:center; justify-content:center; pointer-events:none; z-index:80; font-weight:900; color:#fff; text-shadow:0 0 12px #f0f, 0 0 28px #f80; }
-        #sale-notice { position:absolute; top:105px; left:50%; transform:translateX(-50%); display:none; color:#ff0; font-weight:bold; text-shadow:0 0 8px #f80; }
+        #level-progress { position:absolute; top:10px; left:10px; width:145px; color:#0ff; font-size:11px; text-align:left; }
+        #level-progress .bar-bg { margin-top:3px; height:8px; }
+        #level-progress-fill { height:100%; background:linear-gradient(90deg,#0ff,#0f8); width:0; }
         #result-retry-hint { animation:retryBlink .8s steps(2,end) infinite; color:#ff8; font-weight:bold; margin-top:18px; }
         .result-link { background:none; border:none; color:#aaa; padding:8px 12px; font:inherit; text-decoration:underline; }
         @keyframes retryBlink { 50% { opacity:.25; } }
@@ -109,32 +110,29 @@
             <div id="score-val">0</div>
             <div id="score-mult">x1.0</div>
         </div>
+        <div id="level-progress"><span id="level-progress-text">Lv0　¥0/600</span><div class="bar-bg"><div id="level-progress-fill"></div></div></div>
         <div class="status-group">
             <div id="time-display">⏱ 0:00</div>
             <div id="heart-display"></div>
             <div id="buff-display"></div>
-            <div id="boss-hp-bar" style="display:none; width:100%; height:8px; background:#300; border:1px solid #f00; margin-top:5px;"><div id="boss-hp" style="width:100%; height:100%; background:#f00;"></div></div>
         </div>
         <div id="joystick-base"><div id="joystick-stick"></div></div>
         <div id="gesture-hint">引っ張る=移動　タップ=交代　長押し=爆発(♡消費)　止まる=チャージ</div>
         <div id="bottom-controls">
             <button class="big-btn" onclick="openMenu()">☰ メニュー</button>
-            <button class="big-btn" id="ec-btn" onclick="openEC()">🛒 ショップ <span id="ec-btn-money">¥0</span></button>
         </div>
-        <div id="sale-notice"></div>
         <div id="ensemble-banner"></div>
     </div>
 
-    <div id="ec-scene" class="overlay-menu">
-        <h2 style="color:#ffd700; margin:0 0 2px 0;">🛒 EC で注文</h2>
-        <div id="ec-money" style="color:#0f8; font-size:14px; font-weight:bold; margin-bottom:8px;">所持 ¥0</div>
-        <div style="color:#888; font-size:11px; margin-bottom:12px;">買うと数秒後にマップへ📦が届く。拾って発動。</div>
-        <div id="ec-list" style="width:100%; display:flex; flex-direction:column; align-items:center; overflow-y:auto;"></div>
-        <button onclick="closeEC()" class="main-btn active" style="margin-top:10px; max-width:220px;">閉じて戦闘へ</button>
+    <div id="level-scene" class="overlay-menu">
+        <h2 style="color:#ffd700; margin:0 0 5px 0;">LEVEL UP!</h2>
+        <div style="color:#aaa; font-size:12px; margin-bottom:12px;">強化を選ぶと📦で届く</div>
+        <div id="level-list" style="width:100%; display:flex; flex-direction:column; align-items:center; overflow-y:auto;"></div>
     </div>
     <div id="menu-scene" class="overlay-menu">
         <h2 style="color:#0ff; margin:0 0 12px 0;">☰ メニュー</h2>
         <div id="mission-body" style="font-size:14px; line-height:1.6; margin-bottom:16px;"></div>
+        <button id="se-toggle" onclick="toggleSE()" style="background:none; border:1px solid #688; border-radius:20px; color:#8ff; padding:9px 26px; margin-bottom:8px; font-family:inherit;">🔊 SE ON</button>
         <button onclick="closeMenu()" class="main-btn active" style="max-width:220px;">閉じて戦闘へ</button>
         <button onclick="menuRetry()" style="background:none; border:1px solid #666; border-radius:20px; color:#aaa; padding:9px 26px; margin-top:16px; font-family:inherit;">🔄 リトライ (同じ編成で最初から)</button>
         <button onclick="retireRun()" style="background:none; border:1px solid #833; border-radius:20px; color:#c66; padding:9px 26px; margin-top:8px; font-family:inherit;">🏳️ リタイア (ランを終了)</button>
@@ -171,29 +169,29 @@ const CONFIG = {
     WALL_MARGIN: 20,
     PROP_COUNT: 10, PROP_HP: 20, PROP_BLOCK: 40, PROP_SAFE_DIST: 120,   // 障害物=遮蔽物 (非破壊・敵を巻く用)
     PROP_RESPAWN_INTERVAL: 240, PROP_RESPAWN_DIST: 300,
-    // --- EC(自発ショップ) + 宅配ドロップ ---
+    // --- レベルアップ + 宅配ドロップ ---
     DELIVERY_DELAY: 300,                    // 注文から投下まで (約5秒)
     DELIVERY_DIST_MIN: 180, DELIVERY_DIST_MAX: 340,
-    EC_PRICE_GROWTH: 1.6,                   // 同じ商品を買うたび価格1.6倍
     EXTRA_SHOT_ANGLE: 0.15, EXTRA_AREA_DELAY: 6,
     SHOP_SIZE_STEP: 0.6, SHOP_RANGE_STEP: 0.4, SHOP_BURST_REDUCE: 180,
+    SHOE_STEP: 0.08, MENTAL_STEP: 0.85, MAGNET_STEP: 40,
+    LEVEL_FIRST: 600, LEVEL_SECOND: 1200, LEVEL_GROWTH: 1.9,
     ENEMY_MAX: 8, ENEMY_MAX_CAP: 18,
     ENEMY_SPAWN_INTERVAL: 100, SPAWN_MIN_INTERVAL: 40, ENEMY_SPAWN_DIST: 500,
     TARGET_RANGE: 600,
     BULLET_SPEED: 12, BULLET_LIFE: 45, BULLET_SIZE: 5,
-    CONTACT_DIST: 40, CONTACT_INTERVAL: 20, CONTACT_SEX: 4, CONTACT_KNOCK: 8,
+    CONTACT_DIST: 40, CONTACT_INTERVAL: 20, CONTACT_SEX: 4, CONTACT_KNOCK: 12,
+    CONTACT_INVULN: 45,
     CONTACT_CHARGE_LOCK: 60,                                // 接触中/接触後1秒は自力チャージ無効
     ENEMY_BULLET_SEX: 15,
     PICKUP_RADIUS: 50,
     DROP_MONEY_RATE: 0.14, DROP_BLOOD_RATE: 0.42,            // 💰は控えめ / 🩸(ゲージ源)は多め
     PROP_DROP_VAL: 100, ENEMY_DROP_VAL: 900, BOSS_DROP_VAL: 1800,
     BLOOD_SEX_GAIN: 28,                                       // 🩸拾得で快感チャージ (白♡源)
-    BOSS_NORMA: 40,                                           // 中ボスはたまに (旧15=出過ぎ)
-    BOSS_HP: 350, BOSS_HP_GROWTH: 0.35, BOSS_SPD: 1.5,       // 中ボス=ザコの約10倍のタフさ (旧1800)
-    BOSS_ATK_INTERVAL: 90, BOSS_BULLET_SPD: 3.0,              // (未使用) ボスは弾を撃たない
-    BOSS_RING_INTERVAL: 120,
-    BOSS_SUMMON_INTERVAL: 150,                                // ボスは弾でなく手下を呼ぶ
-    BOSS_CONTACT_DIST: 60, BOSS_CONTACT_SEX: 6, BOSS_CONTACT_KNOCK: 50,
+    ELITE_ICON: '👹', ELITE_CHEST_ICON: '🎁',
+    BOSS_NORMA: 30,
+    BOSS_HP: 140, BOSS_HP_GROWTH: 0.35, BOSS_SPD: 1.5,
+    BOSS_CONTACT_DIST: 60, BOSS_CONTACT_SEX: 5, BOSS_CONTACT_KNOCK: 15,
     KILL_INVULN: 60,
     SWITCH_COOLDOWN: 45,
     BENCH_SEX_REGEN: 0.01,     // 控えメンバーの快感自然発散/F (遅め。貯めた意味を保つ)
@@ -211,10 +209,8 @@ const CONFIG = {
     RANGE_UNIT: 110,               // 射程1 ≈ 110px (マユゥの射程3=約330px基準)
     BUFF_TIME: 600,                // 「一定時間」系爆発の持続 (10秒)
     BURST_KNOCK_R: 220, BURST_KNOCK: 70,   // 爆発共通の小ノックバック (緊急脱出)
-    // レベルアップ
-    LEVEL_BASE: 1500, LEVEL_GROWTH: 1.5,
     // スコア
-    SCORE_PROP: 10, SCORE_BOSS: 3000, SCORE_PERFECT: 1000,
+    SCORE_PROP: 10, SCORE_BOSS: 1500,
     SURVIVAL_TICK: 600, SURVIVAL_BASE: 50,
     BLOOD_SCORE_TIME: 1200, BLOOD_SCORE_BONUS: 0.3,
     GLOW_MULT: 1.5,
@@ -226,7 +222,6 @@ const CONFIG = {
     BURST_COOLDOWN_MIN: 360,        // ショップ短縮後も6秒が下限
     DEVICE_FIRST_DELAY: 60,        // 置き土産の初弾までのF
     ENSEMBLE_SCORE: 1000,
-    SALE_TIME_MS: 10000, SALE_RATE: 0.7,
     HOMING_TURN: 0.09              // 追尾Lvあたりの旋回力
 };
 
@@ -276,14 +271,25 @@ const ENEMY_TYPES = [
     { type:1, icon:'🦇', hp:15, spd:2.3, cool:0, score:80, weight:35, pack:[2,4] },
     { type:2, icon:'🐍', hp:50, spd:1.0, cool:180, score:150, weight:20, pack:[1,1] }
 ];
-// EC(自発ショップ)の商品。武器6種強化が主軸 (キャラ別ドラフトは後日)。価格は購入ごとに上昇
+// レベルアップ候補。選択後は宅配、エリート宝箱では即時発動。
 const ITEM_DEFS = [
-    { id:'extra', n:'もう1個投げる', d:'投射物+1／範囲攻撃は0.1秒後にもう1回', price:4000, max:3, f:() => runMods.extraAttacks++ },
-    { id:'pierce', n:'貫通が付く', d:'すべての弾が敵を貫通', price:5000, max:1, cond:() => party.some(m => !m.dead && !m.atk.pierce), f:() => runMods.pierce = true },
-    { id:'size', n:'特大化', d:'弾サイズ／範囲攻撃半径 +60%', price:3000, f:() => { runMods.sizeMul += CONFIG.SHOP_SIZE_STEP; runMods.areaSizeMul += CONFIG.SHOP_SIZE_STEP; } },
-    { id:'range', n:'望遠', d:'射程 +40%', price:2500, f:() => runMods.rangeMul += CONFIG.SHOP_RANGE_STEP },
-    { id:'burstCool', n:'冷却スプレー', d:'爆発CT -3秒（下限6秒）', price:4000, max:3, f:() => runMods.burstCdReduce += CONFIG.SHOP_BURST_REDUCE },
-    { id:'revive', n:'応急処置キット', d:'離脱メンバーを黒♡半分で1人復帰', price:2000, cond:() => party.some(m => m.dead), f:() => { const m = party.find(m => m.dead); if(m) { m.dead = false; m.sex = 0; m.white = 0; m.black = Math.floor(m.heartMax/2); m.stun = 0; updateMemberUI(); } } }
+    { id:'extra', n:'もう1個投げる', d:'投射物+1／範囲攻撃は0.1秒後にもう1回', f:() => runMods.extraAttacks++ },
+    { id:'pierce', n:'貫通が付く', d:'すべての弾が敵を貫通', once:true, f:() => runMods.pierce = true },
+    { id:'size', n:'特大化', d:'弾サイズ／範囲攻撃半径 +60%', f:() => { runMods.sizeMul += CONFIG.SHOP_SIZE_STEP; runMods.areaSizeMul += CONFIG.SHOP_SIZE_STEP; } },
+    { id:'range', n:'望遠', d:'射程 +40%', f:() => runMods.rangeMul += CONFIG.SHOP_RANGE_STEP },
+    { id:'burstCool', n:'冷却スプレー', d:'爆発CT -3秒（最短6秒）', cond:() => burstCooldown() > CONFIG.BURST_COOLDOWN_MIN, f:() => runMods.burstCdReduce += CONFIG.SHOP_BURST_REDUCE },
+    { id:'shoes', n:'シューズ', d:'移動速度 +8%', f:() => runMods.spdMul += CONFIG.SHOE_STEP },
+    { id:'mental', n:'メンタルケア', d:'被ゲージ -15%', f:() => runMods.guardMul *= CONFIG.MENTAL_STEP },
+    { id:'magnet', n:'マグネット', d:'回収範囲 +40', f:() => runMods.pickup += CONFIG.MAGNET_STEP },
+    { id:'revive', n:'応急処置キット', d:'離脱メンバーを黒♡半分で1人復帰', common:true, cond:() => party.some(m => m.dead), f:() => { const m = party.find(m => m.dead); if(m) { m.dead = false; m.sex = 0; m.white = 0; m.black = Math.floor(m.heartMax/2); m.stun = 0; updateMemberUI(); } } }
+];
+const CHAR_ITEM_POOLS = [
+    ['extra','magnet','shoes','size'], ['size','mental','burstCool','extra'],
+    ['size','range','burstCool','shoes'], ['size','shoes','burstCool','mental'],
+    ['range','size','extra','burstCool'], ['extra','range','shoes','pierce'],
+    ['burstCool','shoes','mental','magnet'], ['extra','range','magnet','mental'],
+    ['extra','size','range','burstCool','shoes','pierce'], ['size','range','burstCool','extra'],
+    ['extra','size','shoes','pierce'], ['size','burstCool','mental','magnet']
 ];
 // ミッション (常時3枠、達成で報酬→補充。差別化その1)
 const MISSION_DEFS = [
@@ -295,7 +301,7 @@ const MISSION_DEFS = [
 ];
 
 // ---------------- セーブデータ ----------------
-let saveData = { money: 0, upgrades: { resist:0, power:0, speed:0, cool:0, range:0 }, bestScores: [], bestEnsemble:0 };
+let saveData = { money: 0, upgrades: { resist:0, power:0, speed:0, cool:0, range:0 }, bestScores: [], bestEnsemble:0, seOn:true };
 function loadSave() {
     const d = localStorage.getItem('zodiac_v41');
     if(!d) {
@@ -317,6 +323,52 @@ function loadSave() {
     } catch(e) {}
 }
 function saveGame() { localStorage.setItem('zodiac_v41', JSON.stringify(saveData)); }
+let audioCtx = null, masterGain = null;
+const seLast = {};
+function ensureAudio() {
+    if(!saveData.seOn) return null;
+    if(!audioCtx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if(!AC) return null;
+        audioCtx = new AC(); masterGain = audioCtx.createGain(); masterGain.gain.value = 0.2; masterGain.connect(audioCtx.destination);
+    }
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+}
+function tone(freq, start, dur, type='square', gain=0.12, endFreq=null) {
+    const ac=audioCtx, o=ac.createOscillator(), g=ac.createGain();
+    o.type=type; o.frequency.setValueAtTime(freq,start); if(endFreq) o.frequency.exponentialRampToValueAtTime(endFreq,start+dur);
+    g.gain.setValueAtTime(gain,start); g.gain.exponentialRampToValueAtTime(0.001,start+dur);
+    o.connect(g); g.connect(masterGain); o.start(start); o.stop(start+dur);
+}
+function noise(start,dur,gain=0.08) {
+    const ac=audioCtx, len=Math.ceil(ac.sampleRate*dur), buf=ac.createBuffer(1,len,ac.sampleRate), d=buf.getChannelData(0);
+    for(let i=0;i<len;i++) d[i]=Math.random()*2-1;
+    const s=ac.createBufferSource(), g=ac.createGain(); s.buffer=buf; g.gain.setValueAtTime(gain,start); g.gain.exponentialRampToValueAtTime(0.001,start+dur); s.connect(g); g.connect(masterGain); s.start(start);
+}
+function playSE(name, value=0) {
+    if(!saveData.seOn || !ensureAudio()) return;
+    const now=audioCtx.currentTime, ms=performance.now(), gap=name==='hit'?180:60;
+    if(ms-(seLast[name]||0)<gap) return; seLast[name]=ms;
+    if(name==='coin') { tone(880,now,.05); tone(1320,now+.045,.07); }
+    else if(name==='blood') tone(180,now,.13,'sine',.15,110);
+    else if(name==='hit') { noise(now,.035,.07); tone(260,now,.11,'square',.09,130); }
+    else if(name==='whiteHeart') [660,880,1100].forEach((f,i)=>tone(f,now+i*.055,.13,'triangle',.12,f*1.08));
+    else if(name==='blackHeart') { tone(330,now,.22,'triangle',.11); tone(220,now+.1,.28,'triangle',.1); }
+    else if(name==='burst') { noise(now,.1,.15); tone(100,now,.22,'sine',.18,45); }
+    else if(name==='ensemble') { const notes=[523,659,784,1047].slice(0,value); notes.forEach(f=>tone(f,now,.3+value*.08,'square',.1)); }
+    else if(name==='switch') noise(now,.07,.08);
+    else if(name==='level') { tone(880,now,.08,'triangle',.12); tone(1760,now+.07,.35,'triangle',.1); }
+    else if(name==='packageLand') tone(130,now,.12,'sine',.13,90);
+    else if(name==='packageGet') { tone(440,now,.06); tone(880,now+.055,.12); }
+    else if(name==='ravage') tone(380,now,.65,'triangle',.13,90);
+}
+function toggleSE() {
+    saveData.seOn=!saveData.seOn; saveGame();
+    document.getElementById('se-toggle').innerText=saveData.seOn?'🔊 SE ON':'🔇 SE OFF';
+    if(saveData.seOn) { ensureAudio(); playSE('coin'); }
+}
+window.addEventListener('pointerdown', ensureAudio, {passive:true});
 function resetSave() {
     if(confirm("データを初期化しますか？")) {
         localStorage.removeItem('zodiac_v41');
@@ -416,15 +468,16 @@ let worldX = 0, worldY = 0, frame = 0;
 let isOver = false, inGame = false, paused = false;
 let enemies = [], props = [], bullets = [], enemyBullets = [], drops = [], floatingTexts = [];
 let killCount = 0, propCount = 0, sessionMoney = 0;
-let sessionScore = 0, maxMult = 1, bossKills = 0, ravagedThisCycle = false;
+let sessionScore = 0, maxMult = 1, bossKills = 0;
 let bloodTimer = 0, invulnTimer = 0, spawnTimer = 0, switchTimer = 0, lastEnemyContactFrame = -Infinity;
 let burstFx = null;
 let devices = [], burstCd = 0, keyBurstHeld = false;
 let zones = [], sweepFx = [], buffs = {}, partyMul = 1, enemyUid = 1;
 let boss = null;
 let knockVec = {x:0, y:0};
-let deliveries = [], ecBought = {};
-let delayedAttacks = [], saleUntil = 0, ensembleFx = null, resultRetryAt = 0, lastSaleSecond = -1;
+let deliveries = [], itemTaken = {};
+let delayedAttacks = [], ensembleFx = null, resultRetryAt = 0;
+let runLevel = 0, nextLevelMoney = CONFIG.LEVEL_FIRST, levelDraft = [];
 let runMods = null;
 let missions = [];
 let missionDoneCount = {};
@@ -460,11 +513,12 @@ function resetRun() {
     fitCanvas();
     worldX = CONFIG.STAGE_W / 2; worldY = CONFIG.STAGE_H / 2;
     frame = 0; sessionMoney = 0; killCount = 0; propCount = 0;
-    sessionScore = 0; maxMult = 1; bossKills = 0; ravagedThisCycle = false;
+    sessionScore = 0; maxMult = 1; bossKills = 0;
     bloodTimer = 0; invulnTimer = 0; spawnTimer = CONFIG.ENEMY_SPAWN_INTERVAL; switchTimer = 0; lastEnemyContactFrame = -Infinity;
     burstFx = null;
     boss = null; isOver = false; inGame = true; paused = false;
-    deliveries = []; ecBought = {}; delayedAttacks = []; saleUntil = 0; ensembleFx = null; lastSaleSecond = -1;
+    deliveries = []; itemTaken = {}; delayedAttacks = []; ensembleFx = null;
+    runLevel = 0; nextLevelMoney = CONFIG.LEVEL_FIRST; levelDraft = [];
     runMods = { atkMul:1, coolMul:1, rangeMul:1, spdMul:1, pickup:0, burstMul:1, chargeMul:1, guardMul:1, sizeMul:1, areaSizeMul:1, bulletSpdMul:1, homing:0, extraAttacks:0, pierce:false, burstCdReduce:0 };
     devices = []; burstCd = 0; keyBurstHeld = false;
     zones = []; sweepFx = []; enemyUid = 1;
@@ -481,8 +535,7 @@ function resetRun() {
         while(Math.hypot(x - worldX, y - worldY) < CONFIG.PROP_SAFE_DIST);
         props.push({ x, y, t: Math.random() > 0.5 ? '🌳' : '🪨' });
     }
-    document.getElementById('boss-hp-bar').style.display = 'none';
-    document.getElementById('ec-scene').style.display = 'none';
+    document.getElementById('level-scene').style.display = 'none';
     document.getElementById('menu-scene').style.display = 'none';
     updateMemberUI();
 }
@@ -596,6 +649,7 @@ function doSwitch(i) {
     if(devices.length < before) pushText("置き土産を回収した", "#888", 35, -70);
     activeIdx = i;
     switchTimer = CONFIG.SWITCH_COOLDOWN;
+    playSE('switch');
     updateMemberUI();
 }
 function updateDevices() {
@@ -627,6 +681,7 @@ function triggerEnsemble(p) {
     if(people >= 4) party.filter(m => !m.dead && m.black > 0).forEach(m => { m.black--; m.white++; });
     if(people > saveData.bestEnsemble) { saveData.bestEnsemble = Math.min(4, people); saveGame(); }
     ensembleFx = { people, l:60, maxL:60, text:ensembleLabel(people) };
+    playSE('ensemble', people);
     updateMemberUI();
 }
 
@@ -650,6 +705,7 @@ function burstCommon(x, y, self) {
     });
     if(self) invulnTimer = Math.max(invulnTimer, CONFIG.BURST_INVULN);
     burstFx = { x, y, r: CONFIG.BURST_KNOCK_R, l: 20, maxL: 20, c: self ? "#f0f" : "#fa0" };
+    playSE('burst');
 }
 // キャラ固有の爆発 (裏の顔)。バフ系はグローバル=操作中のキャラに乗る。x,y=発生源(本人 or 置き土産)
 function executeBurst(id, x, y, depth = 0) {
@@ -724,15 +780,15 @@ function addSex(p, amount, fromEnemy) {
     if(p.sex >= 100) { p.sex = 0; gainHeart(p, fromEnemy); }
 }
 function gainHeart(p, fromEnemy) {
-    if(fromEnemy) { p.black++; pushText("篭絡…黒♡+1", "#c6c", 40, -60); }
-    else { p.white++; pushText("♡+1 長押しで爆発", "#ff6", 32, -50); }
+    if(fromEnemy) { p.black++; pushText("篭絡…黒♡+1", "#c6c", 40, -60); playSE('blackHeart'); }
+    else { p.white++; pushText("♡+1 長押しで爆発", "#ff6", 32, -50); playSE('whiteHeart'); }
     if(p.white + p.black >= p.heartMax) { ravage(p); return; }
     updateMemberUI();
 }
 function ravage(p) {
     p.dead = true; p.sex = 0; p.white = 0;
-    ravagedThisCycle = true;
     pushText(`${p.e} ♡が限界…蹂躙され離脱`, "#f33", 80, -70);
+    playSE('ravage');
     const aliveIdx = party.findIndex(m => !m.dead);
     if(aliveIdx === -1) { endGame(); return; }
     if(party[activeIdx].dead) {
@@ -769,52 +825,51 @@ function updateMissions() {
     while(missions.length < 3) addMission();
 }
 
-// ---------------- EC(自発ショップ) + 宅配ドロップ ----------------
-// 好きな時に🛒で開く(その間だけ停止)。注文品は数秒後にマップへ📦投下→拾って発動。
-function saleActive() { return Date.now() < saleUntil; }
-function itemVisible(it) { return !it.cond || it.cond(); }
-function itemAvailable(it) { return (!it.cond || it.cond()) && (!it.max || (ecBought[it.id] || 0) < it.max); }
-function ecPrice(it) {
-    const normal = it.price * Math.pow(CONFIG.EC_PRICE_GROWTH, ecBought[it.id] || 0);
-    return Math.round(normal * (saleActive() ? CONFIG.SALE_RATE : 1));
+// ---------------- レベルアップ + 宅配ドロップ ----------------
+function itemAvailableFor(p, it) {
+    if(it.once && itemTaken[it.id]) return false;
+    return !it.cond || it.cond();
 }
-function openEC() {
-    if(isOver || paused) return;
-    paused = true;
-    moveTouchId = null; gestures.clear(); joyEnd();
-    renderEC();
-    document.getElementById('ec-scene').style.display = 'flex';
+function itemPoolFor(p) {
+    const ids = CHAR_ITEM_POOLS[p.id].concat(party.some(m => m.dead) ? ['revive'] : []);
+    return ids.map(id => ITEM_DEFS.find(it => it.id === id)).filter(it => it && itemAvailableFor(p, it));
 }
-function renderEC() {
-    document.getElementById('ec-money').innerText = `所持 ¥${sessionMoney.toLocaleString()}`;
-    const pool = ITEM_DEFS.filter(itemVisible);
-    const sale = saleActive() ? `<div style="color:#ff0; font-weight:bold; margin-bottom:8px;">SALE 30% OFF　残り${Math.ceil((saleUntil-Date.now())/1000)}秒</div>` : '';
-    document.getElementById('ec-list').innerHTML = pool.map(it => {
-        const maxed = !!it.max && (ecBought[it.id] || 0) >= it.max;
-        const price = ecPrice(it);
-        const can = !maxed && sessionMoney >= price;
-        return `<div class="draft-card${can ? '' : ' ec-poor'}" onclick="buyEC('${it.id}')">
-            <div class="draft-name">📦 ${it.n}<span style="float:right; color:${can ? '#0f8' : '#c66'}">${maxed ? 'MAX' : '¥'+price.toLocaleString()}</span></div>
-            <div class="draft-desc">${it.d}</div></div>`;
-    }).join('');
-    document.getElementById('ec-list').insertAdjacentHTML('afterbegin', sale);
+function shuffled(items) {
+    const a = items.slice();
+    for(let i=a.length-1;i>0;i--) { const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+    return a;
 }
-function buyEC(id) {
-    const it = ITEM_DEFS.find(x => x.id === id);
-    if(!it || !itemAvailable(it)) { renderEC(); return; }
-    const price = ecPrice(it);
-    if(sessionMoney < price) { pushText("お金が足りない", "#f88", 25); return; }
-    sessionMoney -= price;
-    ecBought[id] = (ecBought[id] || 0) + 1;
+function checkLevelUp() {
+    if(isOver || paused || sessionMoney < nextLevelMoney) return;
+    const p = party[activeIdx], pool = itemPoolFor(p);
+    if(!pool.length) return;
+    runLevel++;
+    nextLevelMoney = runLevel === 1 ? CONFIG.LEVEL_SECOND : Math.round(nextLevelMoney * CONFIG.LEVEL_GROWTH);
+    levelDraft = shuffled(pool).slice(0, Math.min(3, pool.length));
+    paused = true; moveTouchId = null; gestures.clear(); joyEnd();
+    document.getElementById('level-list').innerHTML = levelDraft.map(it => `<div class="draft-card" onclick="chooseLevelItem('${it.id}')"><div class="draft-name">📦 ${it.n}</div><div class="draft-desc">${it.d}</div></div>`).join('');
+    document.getElementById('level-scene').style.display = 'flex';
+    playSE('level');
+}
+function chooseLevelItem(id) {
+    const it = levelDraft.find(x => x.id === id);
+    if(!it) return;
+    itemTaken[id] = (itemTaken[id] || 0) + 1;
     deliveries.push({ id, timer: CONFIG.DELIVERY_DELAY });
-    pushText("注文完了！まもなく届く📦", "#0ff", 40, -80);
-    const ap = party[activeIdx];
-    if(ap && !ap.dead && ap.pas === 'shopCharge') { addSex(ap, 15, false); pushText("お買い物で興奮…♥", "#f6a", 35, -60); }   // リウ
-    renderEC();
-}
-function closeEC() {
-    document.getElementById('ec-scene').style.display = 'none';
+    document.getElementById('level-scene').style.display = 'none';
     paused = false;
+    pushText(`${it.n}を注文！📦を拾え`, "#0ff", 50, -80);
+    const ap=party[activeIdx];
+    if(ap && ap.pas==='shopCharge') { addSex(ap,15,false); pushText("お買い物で興奮…♥","#f6a",35,-60); }
+    checkLevelUp();
+}
+function grantRandomItem() {
+    const p = party[activeIdx], pool = itemPoolFor(p);
+    if(!pool.length) return;
+    const it = pool[Math.floor(Math.random()*pool.length)];
+    itemTaken[it.id] = (itemTaken[it.id] || 0) + 1;
+    it.f();
+    pushText(`🎁 ${it.n} 即時発動！`, "#ffd700", 70, -90);
 }
 function updateDeliveries() {
     for(let i = deliveries.length - 1; i >= 0; i--) {
@@ -828,6 +883,7 @@ function updateDeliveries() {
         const y = Math.max(M, Math.min(CONFIG.STAGE_H - M, worldY + Math.sin(a) * dist));
         drops.push({ x, y, t: 'package', itemId: id, val: 0 });
         pushText("📦 届いた！拾いに行け", "#0ff", 40, -90);
+        playSE('packageLand');
     }
 }
 // ---------------- メニュー (ミッション表示 + リトライ/リタイア) ----------------
@@ -836,9 +892,10 @@ function openMenu() {
     paused = true;
     moveTouchId = null; gestures.clear(); joyEnd();
     const norma = CONFIG.BOSS_NORMA * (bossKills + 1);
-    const head = boss ? `BOSSを倒せ！` : `NEXT BOSS ${killCount}/${norma}`;
-    document.getElementById('mission-body').innerHTML = `<div style="color:#f66; margin-bottom:10px;">${head}</div>` +
+    const head = boss ? `エリートを倒して🎁を奪え！` : `NEXT ELITE ${killCount}/${norma}`;
+    document.getElementById('mission-body').innerHTML = `<div style="color:#f66; margin-bottom:6px;">${head}</div><div style="color:#0ff; margin-bottom:10px;">次のLvまで ¥${Math.max(0,nextLevelMoney-sessionMoney).toLocaleString()}</div>` +
         missions.map(m => `<div style="margin:8px 0;">・${m.def.txt(m.n)}　<b>${Math.min(m.prog, m.n)}/${m.n}</b></div>`).join('');
+    document.getElementById('se-toggle').innerText = saveData.seOn ? '🔊 SE ON' : '🔇 SE OFF';
     document.getElementById('menu-scene').style.display = 'flex';
 }
 function closeMenu() {
@@ -932,6 +989,7 @@ function update() {
     updateEnemyBullets(p);
     updateDrops(p);
     updateMissions();
+    checkLevelUp();
     updateDeliveries();
     floatingTexts.forEach(ft => { ft.y--; if(--ft.l <= 0) ft.dead = true; });
     bullets = bullets.filter(b => !b.dead);
@@ -1156,6 +1214,8 @@ function updateEnemies(p) {
             knockVec = { x:-dx/dist*CONFIG.CONTACT_KNOCK, y:-dy/dist*CONFIG.CONTACT_KNOCK };
             pushText("ああっ", "#f0f", 30);
             addSex(p, CONFIG.CONTACT_SEX, true);
+            invulnTimer = Math.max(invulnTimer, CONFIG.CONTACT_INVULN);
+            playSE('hit');
         }
         bullets.forEach(b => {
             if(b.dead || Math.hypot(b.x - en.x, b.y - en.y) >= 30 + b.size) return;
@@ -1183,7 +1243,7 @@ function updateEnemies(p) {
 
 function updateBoss(p) {
     const norma = CONFIG.BOSS_NORMA * (bossKills + 1);
-    if(!boss && (killCount + propCount) >= norma) {
+    if(!boss && killCount >= norma) {
         const M = 60;
         const hpScale = 1 + (frame / 60 / 60) * 0.5;   // ザコと同じ時間スケール ≒ 常に約10倍のタフさ
         const hp = Math.round(CONFIG.BOSS_HP * (1 + CONFIG.BOSS_HP_GROWTH * bossKills) * hpScale);
@@ -1192,30 +1252,17 @@ function updateBoss(p) {
             y: Math.max(M, Math.min(CONFIG.STAGE_H - M, worldY - 400)),
             hp, maxHp: hp, uid: 'B' + bossKills
         };
-        pushText("中ボス出現！タフな金づるだ", "#f80", 80, -100);
-        document.getElementById('boss-hp-bar').style.display = 'block';
+        pushText("エリート出現！宝箱を奪え", "#f80", 80, -100);
     }
     if(!boss) return;
     const dx = worldX - boss.x, dy = worldY - boss.y, dist = Math.hypot(dx, dy) || 1;
     boss.x += dx/dist * CONFIG.BOSS_SPD; boss.y += dy/dist * CONFIG.BOSS_SPD;
-    // ボスも弾を撃たない。代わりに手下を呼んで包囲圧をかける
-    if(frame % CONFIG.BOSS_SUMMON_INTERVAL === 0 && enemies.length < CONFIG.ENEMY_MAX_CAP) {
-        const type = ENEMY_TYPES[Math.random() < 0.5 ? 0 : 1];
-        const n = 2 + (bossKills >= 1 ? 1 : 0);
-        const hpScale = 1 + (frame / 60 / 60) * 0.5;
-        for(let k=0; k<n; k++) {
-            const a = Math.random() * Math.PI * 2;
-            enemies.push({ ...type, uid: enemyUid++,
-                x: boss.x + Math.cos(a) * 70, y: boss.y + Math.sin(a) * 70,
-                hp: Math.round(type.hp * hpScale), maxHp: Math.round(type.hp * hpScale),
-                phase: Math.floor(Math.random() * 600), slowT: 0, poisonT: 0 });
-        }
-        pushText("手下を呼んだ！", "#f66", 30, -90);
-    }
-    if(invulnTimer <= 0 && dist < CONFIG.BOSS_CONTACT_DIST && frame % 10 === 0) {
+    if(invulnTimer <= 0 && dist < CONFIG.BOSS_CONTACT_DIST && frame % CONFIG.CONTACT_INTERVAL === 0) {
         knockVec = { x:-dx/dist*CONFIG.BOSS_CONTACT_KNOCK, y:-dy/dist*CONFIG.BOSS_CONTACT_KNOCK };
         pushText("ぐあぁっ！", "#f00", 40, -50);
         addSex(p, CONFIG.BOSS_CONTACT_SEX, true);
+        invulnTimer = Math.max(invulnTimer, CONFIG.CONTACT_INVULN);
+        playSE('hit');
     }
     bullets.forEach(b => {
         if(b.dead || Math.hypot(b.x - boss.x, b.y - boss.y) >= 60) return;
@@ -1224,16 +1271,13 @@ function updateBoss(p) {
         if(!b.pierce) b.dead = true;
     });
     if(boss.hp <= 0) {
-        for(let k=0; k<18; k++) drops.push({ x:worldX+(Math.random()-0.5)*140, y:worldY+(Math.random()-0.5)*140, t:'money', val: CONFIG.BOSS_DROP_VAL });
+        for(let k=0; k<6; k++) drops.push({ x:boss.x+(Math.random()-0.5)*140, y:boss.y+(Math.random()-0.5)*140, t:'money', val: CONFIG.BOSS_DROP_VAL });
+        drops.push({ x:boss.x, y:boss.y, t:'chest', val:0 });
         addScore(CONFIG.SCORE_BOSS);
-        if(!ravagedThisCycle) { addScore(CONFIG.SCORE_PERFECT); pushText("PERFECT BONUS!", "#ff0", 80, -130); }
-        ravagedThisCycle = false;
         bossKills++;
-        saleUntil = Date.now() + CONFIG.SALE_TIME_MS;
         boss = null;
-        document.getElementById('boss-hp-bar').style.display = 'none';
         invulnTimer = CONFIG.KILL_INVULN;
-        pushText("中ボス撃破！10秒間ショップ30% OFF！", "#ff0", 90, -100);
+        pushText("エリート撃破！🎁を拾え", "#ff0", 90, -100);
     }
 }
 
@@ -1259,14 +1303,19 @@ function updateDrops(p) {
             sessionMoney += d.val * itemMul;
             missionEvent('money');
             pushText(`+¥${d.val * itemMul}`, "#ff0", 30, -60);
+            playSE('coin');
         } else if(d.t === 'package') {
             const it = ITEM_DEFS.find(x => x.id === d.itemId);
-            if(it) { it.f(); pushText(`${it.n} 発動！`, "#ffd700", 50, -70); }
+            if(it) { it.f(); pushText(`${it.n} 発動！`, "#ffd700", 50, -70); playSE('packageGet'); }
+        } else if(d.t === 'chest') {
+            grantRandomItem();
+            playSE('packageGet');
         } else {
             // 🩸: 快感チャージ (拾って白♡を貯められる) ＋ 20秒間スコア倍率+0.3
             addSex(p, CONFIG.BLOOD_SEX_GAIN * itemMul, false);
             bloodTimer = CONFIG.BLOOD_SCORE_TIME;
             pushText("快感チャージ +♡", "#f0f", 30, -60);
+            playSE('blood');
         }
     });
 }
@@ -1301,7 +1350,7 @@ function draw() {
     props.forEach(pr => ctx.fillText(pr.t, pr.x-worldX+cx, pr.y-worldY+cy+10));
     const bob = Math.sin(frame * 0.1) * 5;
     ctx.font = "24px Arial";
-    drops.forEach(d => ctx.fillText(d.t === 'money' ? '💰' : (d.t === 'package' ? '📦' : '🩸'), d.x-worldX+cx, d.y-worldY+cy+bob));
+    drops.forEach(d => ctx.fillText(d.t === 'money' ? '💰' : (d.t === 'package' ? '📦' : (d.t === 'chest' ? CONFIG.ELITE_CHEST_ICON : '🩸')), d.x-worldX+cx, d.y-worldY+cy+bob));
     ctx.fillStyle = "#0ff";
     bullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x-worldX+cx, b.y-worldY+cy, b.size, 0, 7); ctx.fill(); });
     // 薙ぎ払い=塗りの扇 / オーラ=自分中心の円 (攻撃範囲がそのまま見える)
@@ -1333,7 +1382,12 @@ function draw() {
             ctx.font = "30px Arial";
         }
     });
-    if(boss) { ctx.font = "80px Arial"; ctx.fillText("👹", boss.x-worldX+cx, boss.y-worldY+cy+30); }
+    if(boss) {
+        const bx=boss.x-worldX+cx, by=boss.y-worldY+cy;
+        ctx.font = "80px Arial"; ctx.fillText(CONFIG.ELITE_ICON, bx, by+30);
+        ctx.fillStyle="#300"; ctx.fillRect(bx-38,by-62,76,7);
+        ctx.fillStyle="#f44"; ctx.fillRect(bx-38,by-62,76*Math.max(0,boss.hp/boss.maxHp),7);
+    }
     ctx.fillStyle = "#ff3333";
     enemyBullets.forEach(eb => { ctx.beginPath(); ctx.arc(eb.x-worldX+cx, eb.y-worldY+cy, eb.size, 0, 7); ctx.fill(); });
 
@@ -1436,15 +1490,11 @@ function updateHUD() {
     if(burstCd > 0) bd += `<span class="buff-chip">💥${Math.ceil(burstCd / 60)}s</span>`;
     for(const k in buffs) if(buffs[k] > 0) bd += `<span class="buff-chip" title="${BUFF_META[k].n}">${BUFF_META[k].i}${Math.ceil(buffs[k] / 60)}s</span>`;
     document.getElementById('buff-display').innerHTML = bd;
-    document.getElementById('ec-btn-money').innerText = `¥${sessionMoney.toLocaleString()}`;
-    const prices = ITEM_DEFS.filter(itemAvailable).map(ecPrice);
-    const cheapest = prices.length ? Math.min(...prices) : Infinity;
-    document.getElementById('ec-btn').classList.toggle('ready-glow', saleActive() || sessionMoney >= cheapest);
-    const saleEl = document.getElementById('sale-notice');
-    saleEl.style.display = saleActive() ? 'block' : 'none';
-    const saleSecond = saleActive() ? Math.ceil((saleUntil-Date.now())/1000) : 0;
-    saleEl.innerText = saleActive() ? `🛒セール中！30% OFF　${saleSecond}秒` : '';
-    if(paused && document.getElementById('ec-scene').style.display === 'flex' && saleSecond !== lastSaleSecond) { lastSaleSecond = saleSecond; renderEC(); }
+    const prevLevelMoney = runLevel === 0 ? 0 : (runLevel === 1 ? CONFIG.LEVEL_FIRST : Math.round(nextLevelMoney / CONFIG.LEVEL_GROWTH));
+    const levelSpan = Math.max(1, nextLevelMoney-prevLevelMoney);
+    const levelProg = Math.max(0,Math.min(1,(sessionMoney-prevLevelMoney)/levelSpan));
+    document.getElementById('level-progress-text').innerText = `Lv${runLevel}　¥${sessionMoney.toLocaleString()}/${nextLevelMoney.toLocaleString()}`;
+    document.getElementById('level-progress-fill').style.width = `${levelProg*100}%`;
     const ensembleEl = document.getElementById('ensemble-banner');
     ensembleEl.style.display = ensembleFx ? 'flex' : 'none';
     if(ensembleFx) {
@@ -1465,7 +1515,6 @@ function updateHUD() {
     const t = Math.floor(frame / 60);
     const del = deliveries.length ? ` 📦x${deliveries.length}` : '';
     document.getElementById('time-display').innerText = `⏱ ${Math.floor(t/60)}:${String(t%60).padStart(2,'0')}${del}`;
-    if(boss) document.getElementById('boss-hp').style.width = (boss.hp / boss.maxHp * 100) + "%";
 
     const btns = document.getElementById('member-btns').children;
     party.forEach((m, i) => {
@@ -1493,7 +1542,7 @@ function endGame() {
     if(isOver) return;
     isOver = true; inGame = false; paused = false;
     moveTouchId = null; gestures.clear(); joyEnd();
-    document.getElementById('ec-scene').style.display = 'none';
+    document.getElementById('level-scene').style.display = 'none';
     document.getElementById('menu-scene').style.display = 'none';
     const prevBest = saveData.bestScores.length ? saveData.bestScores[0].score : 0;
     const isRecord = sessionScore > prevBest;
