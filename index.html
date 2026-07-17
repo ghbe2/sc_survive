@@ -11,7 +11,6 @@
 
         /* UIパーツ */
         .shop-header { display: flex; justify-content: space-between; width: 100%; max-width: 400px; margin-bottom: 4px; border-bottom: 1px solid #444; padding-bottom: 5px; }
-        .shop-money { color: #ffd700; font-weight: bold; font-size: 18px; }
         #shop-best { width: 100%; max-width: 400px; text-align: right; color: #0ff; font-size: 12px; margin-bottom: 10px; }
         .upgrade-grid { display: grid; grid-template-columns: 1fr; gap: 8px; width: 100%; max-width: 400px; margin-bottom: 20px; }
         .upgrade-card { background: #222; border: 1px solid #444; padding: 10px; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; }
@@ -74,6 +73,7 @@
         .btn-member .mini-gauge { position: absolute; bottom: 0; left: 0; height: 4px; width: 0%; background: linear-gradient(90deg, #f0f, #ff69b4); }
         #gesture-hint { position: absolute; bottom: 110px; width: 100%; text-align: center; color: rgba(255,255,255,0.35); font-size: 10px; pointer-events: none; }
         #ensemble-banner { position:absolute; inset:0; display:none; align-items:center; justify-content:center; pointer-events:none; z-index:80; font-weight:900; color:#fff; text-shadow:0 0 12px #f0f, 0 0 28px #f80; }
+        #buzz-banner { position:absolute; inset:0; display:none; align-items:center; justify-content:center; pointer-events:none; z-index:82; font-size:56px; font-weight:900; color:#fff; background:rgba(255,40,180,.18); text-shadow:0 0 14px #f0f,0 0 30px #ff0; }
         #level-progress { position:absolute; top:10px; left:10px; width:145px; color:#0ff; font-size:11px; text-align:left; }
         #level-progress .bar-bg { margin-top:3px; height:8px; }
         #level-progress-fill { height:100%; background:linear-gradient(90deg,#0ff,#0f8); width:0; }
@@ -110,7 +110,7 @@
             <div id="score-val">0</div>
             <div id="score-mult">x1.0</div>
         </div>
-        <div id="level-progress"><span id="level-progress-text">Lv0　¥0/600</span><div class="bar-bg"><div id="level-progress-fill"></div></div></div>
+        <div id="level-progress"><span id="level-progress-text">Lv0　👍0/5</span><div class="bar-bg"><div id="level-progress-fill"></div></div></div>
         <div class="status-group">
             <div id="time-display">⏱ 0:00</div>
             <div id="heart-display"></div>
@@ -122,6 +122,7 @@
             <button class="big-btn" onclick="openMenu()">☰ メニュー</button>
         </div>
         <div id="ensemble-banner"></div>
+        <div id="buzz-banner">バズった！</div>
     </div>
 
     <div id="level-scene" class="overlay-menu">
@@ -142,7 +143,7 @@
         <h1 id="res-title" style="font-size: 36px; margin: 0;"></h1>
         <div id="res-score" style="font-size: 44px; font-weight: bold; color: #fff; margin: 10px;"></div>
         <p id="res-stats" style="color:#ccc; margin:10px; font-size:14px; line-height:1.9;"></p>
-        <p id="res-money" style="color:#ffd700; font-size:18px; font-weight:bold;"></p>
+        <p id="res-likes" style="color:#ffd700; font-size:18px; font-weight:bold;"></p>
         <div id="result-retry-hint">タップでもう1回</div>
         <div style="margin-top:12px;">
             <button class="result-link" onclick="resultGoSetup(event)">編成を変える</button>
@@ -175,7 +176,7 @@ const CONFIG = {
     EXTRA_SHOT_ANGLE: 0.15, EXTRA_AREA_DELAY: 6,
     SHOP_SIZE_STEP: 0.6, SHOP_RANGE_STEP: 0.4, SHOP_BURST_REDUCE: 180,
     SHOE_STEP: 0.08, MENTAL_STEP: 0.85, MAGNET_STEP: 40,
-    LEVEL_FIRST: 600, LEVEL_SECOND: 1200, LEVEL_GROWTH: 1.9,
+    LEVEL_FIRST: 5, LEVEL_SECOND: 10, LEVEL_GROWTH: 1.8,
     ENEMY_MAX: 8, ENEMY_MAX_CAP: 18,
     ENEMY_SPAWN_INTERVAL: 100, SPAWN_MIN_INTERVAL: 40, ENEMY_SPAWN_DIST: 500,
     TARGET_RANGE: 600,
@@ -185,8 +186,8 @@ const CONFIG = {
     CONTACT_CHARGE_LOCK: 60,                                // 接触中/接触後1秒は自力チャージ無効
     ENEMY_BULLET_SEX: 15,
     PICKUP_RADIUS: 50,
-    DROP_MONEY_RATE: 0.14, DROP_BLOOD_RATE: 0.42,            // 💰は控えめ / 🩸(ゲージ源)は多め
-    PROP_DROP_VAL: 100, ENEMY_DROP_VAL: 900, BOSS_DROP_VAL: 1800,
+    DROP_LIKE_RATE: 0.35, DROP_BLOOD_RATE: 0.42,
+    PROP_DROP_VAL: 1, ENEMY_DROP_VAL: 1, BOSS_DROP_VAL: 1,
     BLOOD_SEX_GAIN: 28,                                       // 🩸拾得で快感チャージ (白♡源)
     ELITE_ICON: '👹', ELITE_CHEST_ICON: '🎁',
     BOSS_NORMA: 30,
@@ -194,8 +195,8 @@ const CONFIG = {
     BOSS_CONTACT_DIST: 60, BOSS_CONTACT_SEX: 5, BOSS_CONTACT_KNOCK: 15,
     KILL_INVULN: 60,
     SWITCH_COOLDOWN: 45,
-    BENCH_SEX_REGEN: 0.01,     // 控えメンバーの快感自然発散/F (遅め。貯めた意味を保つ)
-    STAND_CHARGE: 0.05,        // 立ち止まりチャージ/F (約33秒でMAX)
+    BENCH_CHARGE: 0.03,        // 控えは99まで自然充電（♡化は操作中のみ）
+    STAND_CHARGE: 0.07,
     RESIST_GUARD: 0.04,        // 精神力Lvごとの被ゲージ-4%
     RAVAGE_INVULN: 60,         // 蹂躙離脱後の無敵 (救済)
     JOY_RADIUS: 50,
@@ -222,6 +223,7 @@ const CONFIG = {
     BURST_COOLDOWN_MIN: 360,        // ショップ短縮後も6秒が下限
     DEVICE_FIRST_DELAY: 60,        // 置き土産の初弾までのF
     ENSEMBLE_SCORE: 1000,
+    BOND_DMG_PER: 0.05, BOND_CHARGE_PER: 0.04,
     HOMING_TURN: 0.09              // 追尾Lvあたりの旋回力
 };
 
@@ -249,7 +251,7 @@ const CHAR_DEFS = [
     { id:8,  n:"申", cn:"マユゥ",     e:"🐵", spd:5.2, heartMax:7,
       atk:{ type:'line',      pow:10, freq:1,   rng:3 }, bDesc:"コスプレ変身(チャージ加速・移動中もチャージ)" },
     { id:9,  n:"酉", cn:"ユゥナリナ", e:"🐔", spd:5.0, heartMax:5, pas:'whiteRange',
-      atk:{ type:'boomerang', pow:10, freq:1,   rng:2, pierce:true }, bDesc:"一定時間、撃破で必ず💰" },
+      atk:{ type:'boomerang', pow:10, freq:1,   rng:2, pierce:true }, bDesc:"一定時間、撃破で必ず👍" },
     { id:10, n:"戌", cn:"モコクン",   e:"🐶", spd:4.8, heartMax:5, pas:'moveCharge',
       atk:{ type:'line',      pow:12, freq:1,   rng:1 }, bDesc:"停止チャージ大幅UP" },
     { id:11, n:"亥", cn:"瑞珠",       e:"🐗", spd:4.2, heartMax:5, pas:'blackPower',
@@ -261,7 +263,7 @@ const BUFF_META = {
     minari: { i:'🎁', n:'アイテム2倍' },
     bell:   { i:'💪', n:'攻撃UP＆被ゲージ減' },
     bani:   { i:'💞', n:'被弾も白♡' },
-    yuna:   { i:'💰', n:'撃破で必ず💰' },
+    yuna:   { i:'👍', n:'撃破で必ずいいね' },
     moko:   { i:'🔋', n:'停止チャージUP' },
     mayuu:  { i:'✨', n:'コスプレ変身' }
 };
@@ -293,15 +295,15 @@ const CHAR_ITEM_POOLS = [
 ];
 // ミッション (常時3枠、達成で報酬→補充。差別化その1)
 const MISSION_DEFS = [
-    { id:'kill_any', txt:n => `敵を${n}体倒す`, n:15, money:2000 },
-    { id:'kill_wolf', txt:n => `🐺を${n}体倒す`, n:8, money:1500 },
-    { id:'money', txt:n => `💰を${n}個拾う`, n:10, score:600 },
+    { id:'kill_any', txt:n => `敵を${n}体倒す`, n:15, likes:2 },
+    { id:'kill_wolf', txt:n => `🐺を${n}体倒す`, n:8, likes:2 },
+    { id:'likes', txt:n => `いいねを${n}個集める`, n:10, score:600 },
     { id:'maxswitch', txt:n => `♡を持って交代 x${n}`, n:1, score:1000 },
-    { id:'survive', txt:n => `${n}秒 生き延びる`, n:45, money:1500 }
+    { id:'survive', txt:n => `${n}秒 生き延びる`, n:45, likes:2 }
 ];
 
 // ---------------- セーブデータ ----------------
-let saveData = { money: 0, upgrades: { resist:0, power:0, speed:0, cool:0, range:0 }, bestScores: [], bestEnsemble:0, seOn:true };
+let saveData = { upgrades: { resist:0, power:0, speed:0, cool:0, range:0 }, bestScores: [], bestEnsemble:0, seOn:true };
 function loadSave() {
     const d = localStorage.getItem('zodiac_v41');
     if(!d) {
@@ -309,7 +311,6 @@ function loadSave() {
         if(old) {
             try {
                 const s = JSON.parse(old);
-                saveData.money = s.money || 0;
                 saveData.upgrades = { ...saveData.upgrades, ...(s.upgrades || {}) };
                 saveGame();
                 localStorage.removeItem('zodiac_v40');
@@ -467,7 +468,7 @@ let party = [], activeIdx = 0;
 let worldX = 0, worldY = 0, frame = 0;
 let isOver = false, inGame = false, paused = false;
 let enemies = [], props = [], bullets = [], enemyBullets = [], drops = [], floatingTexts = [];
-let killCount = 0, propCount = 0, sessionMoney = 0;
+let killCount = 0, propCount = 0, sessionLikes = 0;
 let sessionScore = 0, maxMult = 1, bossKills = 0;
 let bloodTimer = 0, invulnTimer = 0, spawnTimer = 0, switchTimer = 0, lastEnemyContactFrame = -Infinity;
 let burstFx = null;
@@ -477,7 +478,8 @@ let boss = null;
 let knockVec = {x:0, y:0};
 let deliveries = [], itemTaken = {};
 let delayedAttacks = [], ensembleFx = null, resultRetryAt = 0;
-let runLevel = 0, nextLevelMoney = CONFIG.LEVEL_FIRST, levelDraft = [];
+let runLevel = 0, nextLevelLikes = CONFIG.LEVEL_FIRST, levelDraft = [], buzzFx = null;
+let bondStacks = 0;
 let runMods = null;
 let missions = [];
 let missionDoneCount = {};
@@ -512,13 +514,13 @@ document.getElementById('result-scene').addEventListener('click', e => {
 function resetRun() {
     fitCanvas();
     worldX = CONFIG.STAGE_W / 2; worldY = CONFIG.STAGE_H / 2;
-    frame = 0; sessionMoney = 0; killCount = 0; propCount = 0;
+    frame = 0; sessionLikes = 0; killCount = 0; propCount = 0;
     sessionScore = 0; maxMult = 1; bossKills = 0;
     bloodTimer = 0; invulnTimer = 0; spawnTimer = CONFIG.ENEMY_SPAWN_INTERVAL; switchTimer = 0; lastEnemyContactFrame = -Infinity;
     burstFx = null;
     boss = null; isOver = false; inGame = true; paused = false;
     deliveries = []; itemTaken = {}; delayedAttacks = []; ensembleFx = null;
-    runLevel = 0; nextLevelMoney = CONFIG.LEVEL_FIRST; levelDraft = [];
+    runLevel = 0; nextLevelLikes = CONFIG.LEVEL_FIRST; levelDraft = []; buzzFx = null; bondStacks = 0;
     runMods = { atkMul:1, coolMul:1, rangeMul:1, spdMul:1, pickup:0, burstMul:1, chargeMul:1, guardMul:1, sizeMul:1, areaSizeMul:1, bulletSpdMul:1, homing:0, extraAttacks:0, pierce:false, burstCdReduce:0 };
     devices = []; burstCd = 0; keyBurstHeld = false;
     zones = []; sweepFx = []; enemyUid = 1;
@@ -610,11 +612,12 @@ window.addEventListener('keyup', e => { if(e.code === 'KeyX') keyBurstHeld = fal
 
 // ---------------- 実効値 ----------------
 function effDmg(p) {
-    let d = p.atk.pow * runMods.atkMul * partyMul;
+    let d = p.atk.pow * runMods.atkMul * partyMul * bondDmgMul();
     if(p.pas === 'blackPower') d *= 1 + p.black * 0.15;   // 瑞珠: 黒♡が多いほど攻撃力UP
     if(buffs.bell > 0) d *= 1.5;                           // ベルペット爆発: 攻撃力UP
     return d;
 }
+function bondDmgMul() { return 1 + bondStacks * CONFIG.BOND_DMG_PER; }
 function effRange(p) {
     let r = runMods.rangeMul;
     if(p.pas === 'whiteRange') r *= 1 + p.white * 0.08;    // ユゥナリナ: 白♡が多いほど射程UP
@@ -679,6 +682,7 @@ function triggerEnsemble(p) {
     addScore(people * people * CONFIG.ENSEMBLE_SCORE);
     if(people === 3 && p.black > 0) { p.black--; p.white++; }
     if(people >= 4) party.filter(m => !m.dead && m.black > 0).forEach(m => { m.black--; m.white++; });
+    bondStacks += people - 1;
     if(people > saveData.bestEnsemble) { saveData.bestEnsemble = Math.min(4, people); saveGame(); }
     ensembleFx = { people, l:60, maxL:60, text:ensembleLabel(people) };
     playSE('ensemble', people);
@@ -723,7 +727,7 @@ function executeBurst(id, x, y, depth = 0) {
         case 2: zones.push({ x, y, r: 250, life: 300, type: 'slow' }); pushText("スローエリア設置", "#08f", 50, -70); break;   // ラコ
         case 3: buffs.bani = B; pushText("興奮状態！被弾も白♡になる", "#f6a", 50, -70); break;   // バーニ
         case 4: {   // リウ: 周囲に中ダメージ
-            const dmg = 60 * runMods.atkMul * partyMul;
+            const dmg = 60 * runMods.atkMul * partyMul * bondDmgMul();
             enemies.forEach(en => { if(Math.hypot(en.x - x, en.y - y) < 300) en.hp -= dmg; });
             if(boss && Math.hypot(boss.x - x, boss.y - y) < 300) boss.hp -= dmg;
             pushText("女王の威圧！", "#fd5", 50, -70);
@@ -751,11 +755,11 @@ function executeBurst(id, x, y, depth = 0) {
             break;
         }
         case 8: buffs.mayuu = B; pushText("コスプレ変身！", "#f0f", 55, -70); break;   // マユゥ
-        case 9: buffs.yuna = B; pushText("大サービス！撃破で必ず💰", "#ffd700", 50, -70); break;   // ユゥナリナ
+        case 9: buffs.yuna = B; pushText("大サービス！撃破で必ず👍", "#ffd700", 50, -70); break;   // ユゥナリナ
         case 10: buffs.moko = B; pushText("ラブ全開！停止チャージ大UP", "#f6a", 50, -70); break;   // モコクン
         case 11:   // 瑞珠: 足元にダメージゾーン2つ
-            zones.push({ x, y, r: 220, life: 300, type: 'damage', pow: 5 * runMods.atkMul * partyMul });
-            zones.push({ x: x + 120, y: y + (Math.random() - 0.5) * 160, r: 220, life: 300, type: 'damage', pow: 5 * runMods.atkMul * partyMul });
+            zones.push({ x, y, r: 220, life: 300, type: 'damage', pow: 5 * runMods.atkMul * partyMul * bondDmgMul() });
+            zones.push({ x: x + 120, y: y + (Math.random() - 0.5) * 160, r: 220, life: 300, type: 'damage', pow: 5 * runMods.atkMul * partyMul * bondDmgMul() });
             pushText("泥エステ開店", "#fa0", 50, -70);
             break;
     }
@@ -817,7 +821,7 @@ function updateMissions() {
         const m = missions[i];
         if(m.prog >= m.n) {
             missionDoneCount[m.def.id] = (missionDoneCount[m.def.id] || 0) + 1;
-            if(m.def.money) { sessionMoney += m.def.money; pushText(`ミッション達成 +¥${m.def.money}`, "#0ff", 60, -95); }
+            if(m.def.likes) { sessionLikes += m.def.likes; pushText(`ミッション達成 👍+${m.def.likes}`, "#0ff", 60, -95); }
             else { addScore(m.def.score); pushText(`ミッション達成 +score`, "#0ff", 60, -95); }
             missions.splice(i, 1);
         }
@@ -840,12 +844,15 @@ function shuffled(items) {
     return a;
 }
 function checkLevelUp() {
-    if(isOver || paused || sessionMoney < nextLevelMoney) return;
+    if(isOver || paused || buzzFx || sessionLikes < nextLevelLikes) return;
     const p = party[activeIdx], pool = itemPoolFor(p);
     if(!pool.length) return;
     runLevel++;
-    nextLevelMoney = runLevel === 1 ? CONFIG.LEVEL_SECOND : Math.round(nextLevelMoney * CONFIG.LEVEL_GROWTH);
+    nextLevelLikes = runLevel === 1 ? CONFIG.LEVEL_SECOND : Math.round(nextLevelLikes * CONFIG.LEVEL_GROWTH);
     levelDraft = shuffled(pool).slice(0, Math.min(3, pool.length));
+    buzzFx = { l:36, maxL:36 };
+}
+function openLevelDraft() {
     paused = true; moveTouchId = null; gestures.clear(); joyEnd();
     document.getElementById('level-list').innerHTML = levelDraft.map(it => `<div class="draft-card" onclick="chooseLevelItem('${it.id}')"><div class="draft-name">📦 ${it.n}</div><div class="draft-desc">${it.d}</div></div>`).join('');
     document.getElementById('level-scene').style.display = 'flex';
@@ -893,7 +900,7 @@ function openMenu() {
     moveTouchId = null; gestures.clear(); joyEnd();
     const norma = CONFIG.BOSS_NORMA * (bossKills + 1);
     const head = boss ? `エリートを倒して🎁を奪え！` : `NEXT ELITE ${killCount}/${norma}`;
-    document.getElementById('mission-body').innerHTML = `<div style="color:#f66; margin-bottom:6px;">${head}</div><div style="color:#0ff; margin-bottom:10px;">次のLvまで ¥${Math.max(0,nextLevelMoney-sessionMoney).toLocaleString()}</div>` +
+    document.getElementById('mission-body').innerHTML = `<div style="color:#f66; margin-bottom:6px;">${head}</div><div style="color:#0ff; margin-bottom:10px;">次のLvまで 👍${Math.max(0,nextLevelLikes-sessionLikes)}</div>` +
         missions.map(m => `<div style="margin:8px 0;">・${m.def.txt(m.n)}　<b>${Math.min(m.prog, m.n)}/${m.n}</b></div>`).join('');
     document.getElementById('se-toggle').innerText = saveData.seOn ? '🔊 SE ON' : '🔇 SE OFF';
     document.getElementById('menu-scene').style.display = 'flex';
@@ -945,7 +952,7 @@ function update() {
     const p = party[activeIdx];
     party.forEach((m, i) => {
         if(m.stun > 0) m.stun--;
-        if(i !== activeIdx && !m.dead && m.sex > 0) m.sex = Math.max(0, m.sex - CONFIG.BENCH_SEX_REGEN);
+        if(i !== activeIdx && !m.dead) m.sex = Math.min(99, m.sex + CONFIG.BENCH_CHARGE);
     });
     for(const k in buffs) if(buffs[k] > 0) buffs[k]--;
     if(bloodTimer > 0) bloodTimer--;
@@ -954,6 +961,7 @@ function update() {
     if(burstCd > 0) burstCd--;
     if(burstFx && --burstFx.l <= 0) burstFx = null;
     if(ensembleFx && --ensembleFx.l <= 0) ensembleFx = null;
+    if(buzzFx && --buzzFx.l <= 0) { buzzFx = null; openLevelDraft(); }
     updateDevices();
     updateZones();
     maxMult = Math.max(maxMult, riskMult());
@@ -965,7 +973,7 @@ function update() {
     const contactLocked = frame - lastEnemyContactFrame <= CONFIG.CONTACT_CHARGE_LOCK;
     const standing = moveVec.x === 0 && moveVec.y === 0 && Math.hypot(knockVec.x, knockVec.y) < 0.5;
     {
-        const base = CONFIG.STAND_CHARGE * runMods.chargeMul;
+        const base = CONFIG.STAND_CHARGE * runMods.chargeMul * (1 + bondStacks * CONFIG.BOND_CHARGE_PER);
         let rate = 0;
         if(!contactLocked && standing) rate = base * (buffs.moko > 0 ? 3 : 1);        // モコクン爆発: 停止チャージ大UP
         else if(!contactLocked && p.pas === 'moveCharge') rate = base * 0.5;          // モコクン: 移動中もゲージ上昇
@@ -1235,8 +1243,8 @@ function updateEnemies(p) {
             missionEvent('kill_any');
             if(en.type === 0) missionEvent('kill_wolf');
             const r = Math.random();
-            if(buffs.yuna > 0 || r < CONFIG.DROP_MONEY_RATE) drops.push({ x:en.x, y:en.y, t:'money', val: CONFIG.ENEMY_DROP_VAL });   // ユゥナリナ爆発: 必ず💰
-            else if(r < CONFIG.DROP_MONEY_RATE + CONFIG.DROP_BLOOD_RATE) drops.push({ x:en.x, y:en.y, t:'blood', val:0 });
+            if(buffs.yuna > 0 || r < CONFIG.DROP_LIKE_RATE) drops.push({ x:en.x, y:en.y, t:'like', val: CONFIG.ENEMY_DROP_VAL });
+            else if(r < CONFIG.DROP_LIKE_RATE + CONFIG.DROP_BLOOD_RATE) drops.push({ x:en.x, y:en.y, t:'blood', val:0 });
         }
     });
 }
@@ -1271,7 +1279,7 @@ function updateBoss(p) {
         if(!b.pierce) b.dead = true;
     });
     if(boss.hp <= 0) {
-        for(let k=0; k<6; k++) drops.push({ x:boss.x+(Math.random()-0.5)*140, y:boss.y+(Math.random()-0.5)*140, t:'money', val: CONFIG.BOSS_DROP_VAL });
+        for(let k=0; k<6; k++) drops.push({ x:boss.x+(Math.random()-0.5)*140, y:boss.y+(Math.random()-0.5)*140, t:'like', val: CONFIG.BOSS_DROP_VAL });
         drops.push({ x:boss.x, y:boss.y, t:'chest', val:0 });
         addScore(CONFIG.SCORE_BOSS);
         bossKills++;
@@ -1299,10 +1307,10 @@ function updateDrops(p) {
         if(d.dead || Math.hypot(d.x - worldX, d.y - worldY) >= pickupR) return;
         d.dead = true;
         const itemMul = buffs.minari > 0 ? 2 : 1;   // ミナリ爆発: アイテム効果2倍
-        if(d.t === 'money') {
-            sessionMoney += d.val * itemMul;
-            missionEvent('money');
-            pushText(`+¥${d.val * itemMul}`, "#ff0", 30, -60);
+        if(d.t === 'like') {
+            sessionLikes += d.val * itemMul;
+            missionEvent('likes');
+            pushText(`👍+${d.val * itemMul}`, "#ff0", 30, -60);
             playSE('coin');
         } else if(d.t === 'package') {
             const it = ITEM_DEFS.find(x => x.id === d.itemId);
@@ -1350,7 +1358,7 @@ function draw() {
     props.forEach(pr => ctx.fillText(pr.t, pr.x-worldX+cx, pr.y-worldY+cy+10));
     const bob = Math.sin(frame * 0.1) * 5;
     ctx.font = "24px Arial";
-    drops.forEach(d => ctx.fillText(d.t === 'money' ? '💰' : (d.t === 'package' ? '📦' : (d.t === 'chest' ? CONFIG.ELITE_CHEST_ICON : '🩸')), d.x-worldX+cx, d.y-worldY+cy+bob));
+    drops.forEach(d => ctx.fillText(d.t === 'like' ? '👍' : (d.t === 'package' ? '📦' : (d.t === 'chest' ? CONFIG.ELITE_CHEST_ICON : '🩸')), d.x-worldX+cx, d.y-worldY+cy+bob));
     ctx.fillStyle = "#0ff";
     bullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x-worldX+cx, b.y-worldY+cy, b.size, 0, 7); ctx.fill(); });
     // 薙ぎ払い=塗りの扇 / オーラ=自分中心の円 (攻撃範囲がそのまま見える)
@@ -1488,13 +1496,17 @@ function updateHUD() {
     // バフ/CTのアイコンチップ (💥=爆発CT残り)
     let bd = '';
     if(burstCd > 0) bd += `<span class="buff-chip">💥${Math.ceil(burstCd / 60)}s</span>`;
+    bd += `<span class="buff-chip">💞×${bondStacks}</span>`;
     for(const k in buffs) if(buffs[k] > 0) bd += `<span class="buff-chip" title="${BUFF_META[k].n}">${BUFF_META[k].i}${Math.ceil(buffs[k] / 60)}s</span>`;
     document.getElementById('buff-display').innerHTML = bd;
-    const prevLevelMoney = runLevel === 0 ? 0 : (runLevel === 1 ? CONFIG.LEVEL_FIRST : Math.round(nextLevelMoney / CONFIG.LEVEL_GROWTH));
-    const levelSpan = Math.max(1, nextLevelMoney-prevLevelMoney);
-    const levelProg = Math.max(0,Math.min(1,(sessionMoney-prevLevelMoney)/levelSpan));
-    document.getElementById('level-progress-text').innerText = `Lv${runLevel}　¥${sessionMoney.toLocaleString()}/${nextLevelMoney.toLocaleString()}`;
+    const prevLevelLikes = runLevel === 0 ? 0 : (runLevel === 1 ? CONFIG.LEVEL_FIRST : Math.round(nextLevelLikes / CONFIG.LEVEL_GROWTH));
+    const levelSpan = Math.max(1, nextLevelLikes-prevLevelLikes);
+    const levelProg = buzzFx ? 1 : Math.max(0,Math.min(1,(sessionLikes-prevLevelLikes)/levelSpan));
+    document.getElementById('level-progress-text').innerText = `Lv${runLevel}　👍${sessionLikes}/${nextLevelLikes}`;
     document.getElementById('level-progress-fill').style.width = `${levelProg*100}%`;
+    const buzzEl=document.getElementById('buzz-banner');
+    buzzEl.style.display=buzzFx?'flex':'none';
+    if(buzzFx) buzzEl.style.opacity=String(Math.min(1,buzzFx.l/10));
     const ensembleEl = document.getElementById('ensemble-banner');
     ensembleEl.style.display = ensembleFx ? 'flex' : 'none';
     if(ensembleFx) {
@@ -1559,9 +1571,9 @@ function endGame() {
     const t = Math.floor(frame / 60);
     document.getElementById('res-stats').innerText =
         `生存時間 ${Math.floor(t/60)}:${String(t%60).padStart(2,'0')}　撃破 ${killCount}　BOSS ${bossKills}\n` +
-        `最大倍率 x${maxMult.toFixed(1)}　自己ベスト ${saveData.bestScores[0].score.toLocaleString()}\n` +
+        `最大倍率 x${maxMult.toFixed(1)}　絆 ×${bondStacks}　自己ベスト ${saveData.bestScores[0].score.toLocaleString()}\n` +
         `最高合奏 ${ensembleLabel(saveData.bestEnsemble)}`;
-    document.getElementById('res-money').innerText = `このランの稼ぎ ¥${sessionMoney.toLocaleString()}`;
+    document.getElementById('res-likes').innerText = `このランのいいね 👍${sessionLikes}`;
 }
 
 // ---------------- 起動 ----------------
