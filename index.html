@@ -29,6 +29,7 @@
         .char-card { position: relative; background: #222; border: 2px solid #444; padding: 8px 4px; border-radius: 6px; cursor: pointer; }
         .char-card.selected { border-color: #f0f; box-shadow: 0 0 8px #f0f; }
         .char-card .trait-tag { display: block; font-size: 9px; font-weight: bold; margin-top: 2px; }
+        .char-thumb { width:34px; height:34px; object-fit:contain; vertical-align:middle; }
 
         .main-btn { width: 100%; max-width: 300px; padding: 12px; border-radius: 30px; background: #444; color: #aaa; border: none; font-weight: bold; font-size: 16px; margin-top: 10px; }
         .main-btn.active { background: linear-gradient(45deg, #f0f, #80f); color: white; box-shadow: 0 4px 15px rgba(255,0,255,0.4); cursor: pointer; }
@@ -70,6 +71,7 @@
         .btn-member.danger { border-color: #c39; }
         .btn-member.dead { opacity: 0.25; filter: grayscale(1); }
         .btn-member .mini-gauge { position: absolute; bottom: 0; left: 0; height: 4px; width: 0%; background: linear-gradient(90deg, #f0f, #ff69b4); }
+        .btn-member .face-img { width:46px; height:46px; object-fit:contain; }
         #gesture-hint { position: absolute; bottom: 110px; width: 100%; text-align: center; color: rgba(255,255,255,0.35); font-size: 10px; pointer-events: none; }
         #ensemble-banner { position:absolute; inset:0; display:none; align-items:center; justify-content:center; pointer-events:none; z-index:80; font-weight:900; color:#fff; text-shadow:0 0 12px #f0f, 0 0 28px #f80; }
         #buzz-banner { position:absolute; inset:0; display:none; align-items:center; justify-content:center; pointer-events:none; z-index:82; font-size:56px; font-weight:900; color:#fff; background:rgba(255,40,180,.18); text-shadow:0 0 14px #f0f,0 0 30px #ff0; }
@@ -168,6 +170,7 @@ const CONFIG = {
     PROP_SAFE_DIST: 120,
     PROP_FIELD_RADIUS: 1300, PROP_DESPAWN_RADIUS: 1800, PROP_CELL: 350,
     PROP_REFRESH_INTERVAL: 30, DROP_DESPAWN_RADIUS: 2500,
+    STUCK_DISTANCE:30, STUCK_FRAMES:300, STUCK_SLOW_FRAMES:600, STUCK_SCREEN_MARGIN:80,
     // --- レベルアップ + 宅配ドロップ ---
     DELIVERY_DELAY: 300,                    // 注文から投下まで (約5秒)
     DELIVERY_DIST_MIN: 180, DELIVERY_DIST_MAX: 340,
@@ -229,6 +232,23 @@ const PROP_DEFS = [
     { icons:['🚚','⛲'], r:70, weight:15 },
     { icons:['🏢','🏠'], r:130, weight:5 }
 ];
+const SPRITE_STATES=['idle_a','idle_b','move_left_high','move_left_low','move_right_high','move_right_low','damage_pain','damage_shy','damage_aversion','down','emotion_overflow'];
+const characterSprites={};
+function spritePath(id,state){return `images/characters/${String(id+1).padStart(2,'0')}_${state}.png`;}
+function preloadCharacterSprites(){CHAR_DEFS.forEach(c=>SPRITE_STATES.forEach(state=>{const img=new Image();img.src=spritePath(c.id,state);characterSprites[`${c.id}:${state}`]=img;}));}
+function spriteImage(id,state){const img=characterSprites[`${id}:${state}`];return img&&img.complete&&img.naturalWidth?img:null;}
+function faceHtml(c,cls='char-thumb'){return `<img class="${cls}" src="${spritePath(c.id,'idle_a')}" onload="this.nextElementSibling.style.display='none'" onerror="this.style.display='none'"><span>${c.e}</span>`;}
+function drawCharacterSprite(g,c,state,x,footY,height=90,alpha=1,flip=false){
+    const img=spriteImage(c.id,state);if(!img)return false;
+    const width=height*img.naturalWidth/img.naturalHeight;g.save();g.globalAlpha=alpha;g.translate(x,footY);if(flip)g.scale(-1,1);g.drawImage(img,-width/2,-height,width,height);g.restore();return true;
+}
+function characterVisual(c){
+    if(c.dead)return{state:'down',flip:false};
+    if(c.reactionUntil>frame){const map={overflow:'emotion_overflow',pain:'damage_pain',shy:'damage_shy',aversion:'damage_aversion'};return{state:map[c.reaction]||'idle_a',flip:c.facing>0};}
+    if(moveVec.x||moveVec.y){const low=Math.floor(frame/15)%2===1,side=c.facing>0?'right':'left';return{state:`move_${side}_${low?'low':'high'}`,fallback:`move_left_${low?'low':'high'}`,flip:c.facing>0};}
+    return{state:Math.floor(frame/30)%2?'idle_b':'idle_a',flip:c.facing>0};
+}
+function drawPartyCharacter(g,c,x,footY,height=90,alpha=1){const v=characterVisual(c);return drawCharacterSprite(g,c,v.state,x,footY,height,alpha,false)||(v.fallback&&drawCharacterSprite(g,c,v.fallback,x,footY,height,alpha,v.flip));}
 function randomProp(x, y) {
     let roll=Math.random()*100, def=PROP_DEFS[0];
     for(const d of PROP_DEFS) { if((roll-=d.weight)<=0) { def=d; break; } }
@@ -408,7 +428,7 @@ function initSetupGrid() {
     grid.innerHTML = '';
     CHAR_DEFS.forEach((c, i) => {
         const card = document.createElement('div'); card.className = 'char-card';
-        card.innerHTML = `<div style="font-size:18px">${c.e}</div>` +
+        card.innerHTML = `<div style="font-size:18px">${faceHtml(c)}</div>` +
             `<span class="trait-tag" style="color:#fd5">${c.cn}</span>` +
             `<div style="font-size:8px; color:#777;">♡${c.heartMax}</div>`;
         card.onclick = () => {
@@ -426,8 +446,8 @@ function updateSetupUI() {
     });
     for(let i=0; i<4; i++) {
         const s = document.getElementById(`slot-${i}`);
-        if(selectedIndices[i] !== undefined) { s.innerText = CHAR_DEFS[selectedIndices[i]].e; s.classList.add('filled'); }
-        else { s.innerText = ''; s.classList.remove('filled'); }
+        if(selectedIndices[i] !== undefined) { s.innerHTML = faceHtml(CHAR_DEFS[selectedIndices[i]],'char-thumb'); s.classList.add('filled'); }
+        else { s.innerHTML = ''; s.classList.remove('filled'); }
     }
     // 人数別の威力倍率表示 (1人=×4 → 4人=×1)
     const bonus = document.getElementById('party-bonus');
@@ -458,9 +478,8 @@ function drawPreview(ts) {
         selectedIndices.forEach((ci, k) => {
             const c = CHAR_DEFS[ci];
             const bounce = Math.abs(Math.sin(ts / 150 + k * 1.3)) * -6;
-            preCtx.font = "28px Arial";
-            preCtx.fillStyle = "#eee";
-            preCtx.fillText(c.e, 50 + k * 55, 45 + bounce);
+            const moveState=Math.floor(ts/250)%2?'move_left_low':'move_left_high';
+            if(!drawCharacterSprite(preCtx,c,moveState,50+k*55,55+bounce,52,1,true)){preCtx.font="28px Arial";preCtx.fillStyle="#eee";preCtx.fillText(c.e,50+k*55,45+bounce);}
             if(k < selectedIndices.length - 1) {   // 継承の流れる向き
                 preCtx.fillStyle = "#666"; preCtx.font = "12px Arial";
                 preCtx.fillText("▶", 78 + k * 55, 33);
@@ -499,7 +518,7 @@ function fitCanvas() { canvas.width = window.innerWidth; canvas.height = window.
 
 function tryStart() {
     if(selectedIndices.length === 0) return;
-    party = selectedIndices.map(i => ({ ...CHAR_DEFS[i], sex:CONFIG.GAUGE_CENTER, dead:false, stun:0, white:0, black:0, lv:1, lvMods:freshLvMods() }));
+    party = selectedIndices.map(i => ({ ...CHAR_DEFS[i], sex:CONFIG.GAUGE_CENTER, dead:false, stun:0, white:0, black:0, reaction:null, reactionUntil:0, facing:-1, lv:1, lvMods:freshLvMods() }));
     partyMul = CONFIG.PARTY_ATK[party.length - 1];   // 1人=×4 → 4人=×1
     stopPreview();
     resetRun();
@@ -703,6 +722,7 @@ function tryBurst(p) {
     if(isOver || p.dead || p.stun > 0 || p.white <= 0) return;
     if(burstCd > 0) { if(frame % 60 === 0) pushText(`爆発まであと${Math.ceil(burstCd / 60)}秒`, "#888", 30); return; }
     p.white--;
+    p.reaction='overflow';p.reactionUntil=frame+36;
     burstCd = burstCooldown();
     burstCommon(worldX, worldY, true);
     executeBurst(p.id, worldX, worldY);
@@ -786,19 +806,21 @@ function addSex(p, amount, fromEnemy) {
         if(p.pas === 'contactWeak') g *= 1.5;                                 // ぱふ先生: 接触の被ゲージが多い(弱点)
         amount *= g;
         if(buffs.bani > 0 && p === party[activeIdx]) fromEnemy = false;       // バーニ爆発中: 被弾を白方向へ反転
+        else { p.reaction='aversion';p.reactionUntil=frame+24; }
     }
     p.sex = Math.max(0, Math.min(100, p.sex + (fromEnemy ? -amount : amount)));
     if(p.sex >= 100) { p.sex = CONFIG.GAUGE_CENTER; gainHeart(p, false); }
     else if(p.sex <= 0) { p.sex = CONFIG.GAUGE_CENTER; gainHeart(p, true); }
 }
 function gainHeart(p, fromEnemy) {
+    p.reaction=fromEnemy?'pain':'shy';p.reactionUntil=frame+36;
     if(fromEnemy) { p.black++; pushText("篭絡…黒♡+1", "#c6c", 40, -60); playSE('blackHeart'); }
     else { p.white++; pushText("♡+1 長押しで爆発", "#ff6", 32, -50); playSE('whiteHeart'); }
     if(p.white + p.black >= p.heartMax) { ravage(p); return; }
     updateMemberUI();
 }
 function ravage(p) {
-    p.dead = true; p.sex = CONFIG.GAUGE_CENTER; p.white = 0;
+    p.dead = true; p.sex = CONFIG.GAUGE_CENTER; p.white = 0; p.downX=worldX;p.downY=worldY;p.reaction='down';p.reactionUntil=Infinity;
     pushText(`${p.e} ♡が限界…蹂躙され離脱`, "#f33", 80, -70);
     playSE('ravage');
     const aliveIdx = party.findIndex(m => !m.dead);
@@ -829,7 +851,10 @@ function updateMissions() {
         const m = missions[i];
         if(m.prog >= m.n) {
             missionDoneCount[m.def.id] = (missionDoneCount[m.def.id] || 0) + 1;
-            if(m.def.likes) { sessionLikes += m.def.likes; pushText(`ミッション達成 ❤+${m.def.likes}`, "#0ff", 60, -95); }
+            if(m.def.likes) {
+                for(let k=0;k<m.def.likes;k++) { const a=Math.PI*2*k/m.def.likes+Math.random()*.3,r=55+Math.random()*45; drops.push({x:worldX+Math.cos(a)*r,y:worldY+Math.sin(a)*r,t:'like',val:1}); }
+                pushText(`ミッション達成 ❤×${m.def.likes}出現`, "#0ff", 60, -95);
+            }
             else { addScore(m.def.score); pushText(`ミッション達成 +score`, "#0ff", 60, -95); }
             missions.splice(i, 1);
         }
@@ -1024,7 +1049,7 @@ function update() {
 }
 
 function updatePlayer(p) {
-    if(moveVec.x !== 0 || moveVec.y !== 0) lastAim = { x: moveVec.x, y: moveVec.y };
+    if(moveVec.x !== 0 || moveVec.y !== 0) { lastAim = { x: moveVec.x, y: moveVec.y }; if(Math.abs(moveVec.x)>.05)p.facing=moveVec.x>0?1:-1; }
     const heartSlow = Math.max(CONFIG.HEART_SLOW_MIN, 1 - (p.white + p.black) * CONFIG.HEART_SLOW_PER);
     const spd = effSpd(p) * heartSlow;
     const nx = worldX + moveVec.x * spd + knockVec.x;
@@ -1187,9 +1212,9 @@ function replenishProps(force=false) {
     let tries=0;
     while(props.length<target && tries++<target*12) {
         const a=Math.random()*Math.PI*2, r=CONFIG.PROP_SAFE_DIST+Math.sqrt(Math.random())*(CONFIG.PROP_FIELD_RADIUS-CONFIG.PROP_SAFE_DIST);
-        const x=worldX+Math.cos(a)*r, y=worldY+Math.sin(a)*r;
-        if(props.some(pr=>Math.hypot(pr.x-x,pr.y-y)<(pr.r+45))) continue;
-        props.push(randomProp(x,y));
+        const x=worldX+Math.cos(a)*r, y=worldY+Math.sin(a)*r, candidate=randomProp(x,y);
+        if(props.some(pr=>Math.hypot(pr.x-x,pr.y-y)<pr.r+candidate.r+80)) continue;
+        props.push(candidate);
     }
 }
 
@@ -1209,7 +1234,8 @@ function spawnEnemies() {
             ...type, uid: enemyUid++,
             x: worldX + Math.cos(a) * (CONFIG.ENEMY_SPAWN_DIST + Math.random() * 80),
             y: worldY + Math.sin(a) * (CONFIG.ENEMY_SPAWN_DIST + Math.random() * 80),
-            hp:type.hp,maxHp:type.hp,phase:Math.floor(Math.random()*600),slowT:0,poisonT:0,rhinoState:type.rhino?'charge':null,rhinoT:type.rhino?30:0
+            hp:type.hp,maxHp:type.hp,phase:Math.floor(Math.random()*600),slowT:0,poisonT:0,rhinoState:type.rhino?'charge':null,rhinoT:type.rhino?30:0,
+            stuckDist:0,stuckFrames:0
         });
     }
 }
@@ -1239,10 +1265,18 @@ function updateEnemies(p) {
             const w = Math.sin((frame + en.phase) * 0.08) * 2;
             mvx += (-dy/dist) * w; mvy += (dx/dist) * w;
         }
-        const nx = en.x + mvx, ny = en.y + mvy;
+        const oldX=en.x,oldY=en.y,nx=en.x+mvx,ny=en.y+mvy;
         const blockX=props.some(pr=>Math.abs(nx-pr.x)<pr.r+15&&Math.abs(en.y-pr.y)<pr.r+15),blockY=props.some(pr=>Math.abs(en.x-pr.x)<pr.r+15&&Math.abs(ny-pr.y)<pr.r+15);
         if(!blockX)en.x=nx;if(!blockY)en.y=ny;
         if(en.rhino&&en.rhinoState==='dash'&&(blockX||blockY)){en.rhinoState='charge';en.rhinoT=30;}
+        en.stuckDist=(en.stuckDist||0)+Math.hypot(en.x-oldX,en.y-oldY);en.stuckFrames=(en.stuckFrames||0)+1;
+        const stuckLimit=en.slowT>0?CONFIG.STUCK_SLOW_FRAMES:CONFIG.STUCK_FRAMES;
+        if(en.stuckFrames>=stuckLimit){
+            const sx=en.x-worldX+canvas.width/2,sy=en.y-worldY+canvas.height/2;
+            const off=sx<-CONFIG.STUCK_SCREEN_MARGIN||sx>canvas.width+CONFIG.STUCK_SCREEN_MARGIN||sy<-CONFIG.STUCK_SCREEN_MARGIN||sy>canvas.height+CONFIG.STUCK_SCREEN_MARGIN;
+            if(en.stuckDist<CONFIG.STUCK_DISTANCE&&dist>=CONFIG.CONTACT_DIST&&off){const a=Math.random()*Math.PI*2;en.x=worldX+Math.cos(a)*CONFIG.ENEMY_SPAWN_DIST;en.y=worldY+Math.sin(a)*CONFIG.ENEMY_SPAWN_DIST;}
+            en.stuckDist=0;en.stuckFrames=0;
+        }
 
         if(invulnTimer <= 0 && dist < CONFIG.CONTACT_DIST && frame % CONFIG.CONTACT_INTERVAL === 0) {
             knockVec = { x:-dx/dist*CONFIG.CONTACT_KNOCK, y:-dy/dist*CONFIG.CONTACT_KNOCK };
@@ -1281,7 +1315,7 @@ function updateBoss(p) {
         const hp=CONFIG.BOSS_HP;
         boss = {
             x:worldX, y:worldY-400,
-            hp,maxHp:hp,uid:'B'+bossKills,slowT:0,poisonT:0
+            hp,maxHp:hp,uid:'B'+bossKills,slowT:0,poisonT:0,stuckDist:0,stuckFrames:0
         };
         pushText("エリート出現！宝箱を奪え", "#f80", 80, -100);
     }
@@ -1291,7 +1325,10 @@ function updateBoss(p) {
     const bnx=boss.x+dx/dist*bsp,bny=boss.y+dy/dist*bsp;
     const bossBlockX=props.some(pr=>Math.abs(bnx-pr.x)<pr.r+35&&Math.abs(boss.y-pr.y)<pr.r+35);
     const bossBlockY=props.some(pr=>Math.abs(boss.x-pr.x)<pr.r+35&&Math.abs(bny-pr.y)<pr.r+35);
-    if(!bossBlockX)boss.x=bnx;if(!bossBlockY)boss.y=bny;
+    const oldBossX=boss.x,oldBossY=boss.y;if(!bossBlockX)boss.x=bnx;if(!bossBlockY)boss.y=bny;
+    boss.stuckDist+=Math.hypot(boss.x-oldBossX,boss.y-oldBossY);boss.stuckFrames++;
+    const bossStuckLimit=boss.slowT>0?CONFIG.STUCK_SLOW_FRAMES:CONFIG.STUCK_FRAMES;
+    if(boss.stuckFrames>=bossStuckLimit){const sx=boss.x-worldX+canvas.width/2,sy=boss.y-worldY+canvas.height/2,off=sx<-CONFIG.STUCK_SCREEN_MARGIN||sx>canvas.width+CONFIG.STUCK_SCREEN_MARGIN||sy<-CONFIG.STUCK_SCREEN_MARGIN||sy>canvas.height+CONFIG.STUCK_SCREEN_MARGIN;if(boss.stuckDist<CONFIG.STUCK_DISTANCE&&dist>=CONFIG.BOSS_CONTACT_DIST&&off){const a=Math.random()*Math.PI*2;boss.x=worldX+Math.cos(a)*CONFIG.ENEMY_SPAWN_DIST;boss.y=worldY+Math.sin(a)*CONFIG.ENEMY_SPAWN_DIST;}boss.stuckDist=0;boss.stuckFrames=0;}
     if(invulnTimer <= 0 && dist < CONFIG.BOSS_CONTACT_DIST && frame % CONFIG.CONTACT_INTERVAL === 0) {
         knockVec={x:-dx/dist*CONFIG.CONTACT_KNOCK,y:-dy/dist*CONFIG.CONTACT_KNOCK};
         pushText("ぐあぁっ！", "#f00", 40, -50);
@@ -1390,6 +1427,11 @@ function draw() {
         ctx.font=`${Math.max(24,Math.round(pr.r*0.9))}px Arial`;
         ctx.fillText(pr.t,pr.x-worldX+cx,pr.y-worldY+cy+pr.r*0.3);
     });
+    party.filter(m=>m.dead&&m.downX!==undefined).forEach(m=>{
+        const dx=m.downX-worldX+cx,dy=m.downY-worldY+cy;
+        ctx.fillStyle='rgba(0,0,0,.35)';ctx.beginPath();ctx.ellipse(dx,dy+4,32,9,0,0,Math.PI*2);ctx.fill();
+        if(!drawCharacterSprite(ctx,m,'down',dx,dy+10,90,.75,false)){ctx.globalAlpha=.55;ctx.font='44px Arial';ctx.fillText('💀',dx,dy);ctx.globalAlpha=1;}
+    });
     const bob = Math.sin(frame * 0.1) * 5;
     ctx.font = "24px Arial";
     drops.forEach(d => ctx.fillText(d.t === 'like' ? '❤' : (d.t === 'package' ? '📦' : (d.t === 'chest' ? CONFIG.ELITE_CHEST_ICON : '🩸')), d.x-worldX+cx, d.y-worldY+cy+bob));
@@ -1434,8 +1476,8 @@ function draw() {
     // 置き土産デバイス (その場に残って撃ち続ける)
     devices.forEach(d => {
         const dx = d.x - worldX + cx, dy = d.y - worldY + cy;
-        ctx.globalAlpha = 0.55; ctx.font = "40px Arial";
-        ctx.fillText(d.e, dx, dy + 12);
+        const dm=party.find(m=>m.id===d.id);
+        if(!dm||!drawCharacterSprite(ctx,dm,'emotion_overflow',dx,dy+28,90,.55,dm.facing>0)){ctx.globalAlpha=.55;ctx.font="40px Arial";ctx.fillText(d.e,dx,dy+12);}
         ctx.globalAlpha = 0.25;
         ctx.strokeStyle = "#fa0"; ctx.lineWidth = 3;
         ctx.beginPath(); ctx.arc(dx, dy, 30, 0, 7); ctx.stroke();
@@ -1483,8 +1525,8 @@ function draw() {
         ctx.globalAlpha = 1;
     }
     if(invulnTimer <= 0 || frame % 10 < 5) {
-        ctx.fillStyle = "#eee"; ctx.font = "60px Arial";
-        ctx.fillText(p.stun > 0 ? "😫" : p.e, cx, cy);
+        ctx.fillStyle='rgba(0,0,0,.38)';ctx.beginPath();ctx.ellipse(cx,cy+30,34,10,0,0,Math.PI*2);ctx.fill();
+        if(!drawPartyCharacter(ctx,p,cx,cy+30,90,1)){ctx.fillStyle="#eee";ctx.font="60px Arial";ctx.fillText(p.stun>0?"😫":p.e,cx,cy);}
     }
     // 頭上のハート列 (白=爆発の弾薬 / 黒=篭絡デバフ)
     if(p.white + p.black > 0) {
@@ -1566,7 +1608,8 @@ function updateHUD() {
         if(!btns[i]) return;
         btns[i].classList.toggle('maxed', !m.dead && m.white > 0);
         btns[i].classList.toggle('danger', !m.dead && m.black > 0);
-        btns[i].querySelector('.face').innerText = m.dead ? '💀' : (m.stun > 0 ? '😫' : m.e);
+        const face=btns[i].querySelector('.face');
+        if(face&&!face.querySelector('img'))face.innerText=m.dead?'💀':(m.stun>0?'😫':m.e);
         btns[i].querySelector('.mini-gauge').style.width = m.dead ? '0%' : m.sex + '%';
     });
 }
@@ -1578,7 +1621,7 @@ function updateMemberUI() {
         if(m.dead) cls += ' dead';
         else { if(m.white > 0) cls += ' maxed'; if(m.black > 0) cls += ' danger'; }
         return `<div class="${cls}" onclick="switchMember(${i})">` +
-            `<span class="face">${m.dead ? '💀' : m.e}</span><div class="mini-gauge"></div></div>`;
+            `<span class="face">${m.dead?'💀':faceHtml(m,'face-img')}</span><div class="mini-gauge"></div></div>`;
     }).join('');
 }
 
@@ -1612,6 +1655,7 @@ function endGame() {
 // ---------------- 起動 ----------------
 window.onload = () => {
     loadSave();
+    preloadCharacterSprites();
     initSetupGrid();
     initShop();
     fitCanvas();
