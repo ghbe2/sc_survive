@@ -53,9 +53,6 @@
         .big-btn.ready-glow { border-color: #0f8; box-shadow: 0 0 14px #0f8; color: #cffde8; }
         #time-display { color: #8ff; font-size: 12px; font-weight: bold; }
         .bar-bg { position: relative; width: 100%; height: 12px; background: #333; border-radius: 6px; overflow: hidden; border: 1px solid #555; }
-        #tug-bar { background: linear-gradient(90deg, #6d247f 0 50%, #f6e6cf 50% 100%); overflow: visible; }
-        #tug-bar::after { content:""; position:absolute; left:50%; top:-3px; bottom:-3px; width:2px; background:#fff; transform:translateX(-1px); box-shadow:0 0 5px #fff; }
-        #tug-needle { position:absolute; top:-5px; width:4px; height:22px; border-radius:2px; background:#ffef5a; box-shadow:0 0 7px #ff0; transform:translateX(-2px); }
         #trait-display { color: #ffd700; font-size: 10px; text-align: right; }
         #heart-display { font-size: 15px; letter-spacing: 2px; line-height: 1; text-align: right; }
         #buff-display { text-align: right; }
@@ -115,7 +112,6 @@
         <div id="level-progress"><span id="level-progress-text">Lv0　❤0/4</span><div class="bar-bg"><div id="level-progress-fill"></div></div></div>
         <div class="status-group">
             <div id="time-display">⏱ 0:00</div>
-            <div id="tug-bar" class="bar-bg"><div id="tug-needle"></div></div>
             <div id="heart-display"></div>
             <div id="buff-display"></div>
         </div>
@@ -168,11 +164,10 @@
 const CONFIG = {
     STEP_MS: 1000 / 60,
     MAX_FRAME_MS: 100,
-    STAGE_W: 880, STAGE_H: 1912,
     GRID_SIZE: 100,
-    WALL_MARGIN: 20,
-    PROP_COUNT: 10, PROP_HP: 20, PROP_BLOCK: 40, PROP_SAFE_DIST: 120,   // 障害物=遮蔽物 (非破壊・敵を巻く用)
-    PROP_RESPAWN_INTERVAL: 240, PROP_RESPAWN_DIST: 300,
+    PROP_SAFE_DIST: 120,
+    PROP_FIELD_RADIUS: 1300, PROP_DESPAWN_RADIUS: 1800, PROP_CELL: 350,
+    PROP_REFRESH_INTERVAL: 30, DROP_DESPAWN_RADIUS: 2500,
     // --- レベルアップ + 宅配ドロップ ---
     DELIVERY_DELAY: 300,                    // 注文から投下まで (約5秒)
     DELIVERY_DIST_MIN: 180, DELIVERY_DIST_MAX: 340,
@@ -228,6 +223,17 @@ const CONFIG = {
     BOND_SPEED_PER:0.03, BOND_BURST_PER:0.04, BOND_CHARGE_PER:0.03,
     HOMING_TURN: 0.09              // 追尾Lvあたりの旋回力
 };
+const PROP_DEFS = [
+    { icons:['🚧','🗑'], r:25, weight:45 },
+    { icons:['🪨','🛢','🌳'], r:40, weight:35 },
+    { icons:['🚚','⛲'], r:70, weight:15 },
+    { icons:['🏢','🏠'], r:130, weight:5 }
+];
+function randomProp(x, y) {
+    let roll=Math.random()*100, def=PROP_DEFS[0];
+    for(const d of PROP_DEFS) { if((roll-=d.weight)<=0) { def=d; break; } }
+    return { x, y, r:def.r, t:def.icons[Math.floor(Math.random()*def.icons.length)] };
+}
 
 // ---------------- データ定義 (しゅがけマッチ設計シート gid=1513096584 準拠) ----------------
 // atk: { type, pow(威力: マユゥ10基準), freq(発/秒), rng(射程: 1≈110px), pierce, bounce, zoneLife/zoneR }
@@ -514,7 +520,7 @@ document.getElementById('result-scene').addEventListener('click', e => {
 
 function resetRun() {
     fitCanvas();
-    worldX = CONFIG.STAGE_W / 2; worldY = CONFIG.STAGE_H / 2;
+    worldX = 0; worldY = 0;
     frame = 0; sessionLikes = 0; killCount = 0; propCount = 0;
     sessionScore = 0; maxMult = 1; bossKills = 0;
     bloodTimer = 0; invulnTimer = 0; spawnTimer = CONFIG.ENEMY_SPAWN_INTERVAL; switchTimer = 0; lastEnemyContactFrame = -Infinity;
@@ -532,12 +538,7 @@ function resetRun() {
     gestures.clear(); moveTouchId = null; lastTap = { t: 0, x: 0, y: 0 };
     lastTime = 0; acc = 0;
     enemies = []; props = []; drops = []; bullets = []; enemyBullets = []; floatingTexts = [];
-    for(let i=0; i<CONFIG.PROP_COUNT; i++) {
-        let x, y;
-        do { x = Math.random() * CONFIG.STAGE_W; y = Math.random() * CONFIG.STAGE_H; }
-        while(Math.hypot(x - worldX, y - worldY) < CONFIG.PROP_SAFE_DIST);
-        props.push({ x, y, t: Math.random() > 0.5 ? '🌳' : '🪨' });
-    }
+    replenishProps(true);
     document.getElementById('level-scene').style.display = 'none';
     document.getElementById('menu-scene').style.display = 'none';
     updateMemberUI();
@@ -720,13 +721,12 @@ function burstCommon(x, y, self) {
 }
 // キャラ固有の爆発 (裏の顔)。バフ系はグローバル=操作中のキャラに乗る。x,y=発生源(本人 or 置き土産)
 function executeBurst(id, x, y, depth = 0) {
-    const B = CONFIG.BUFF_TIME, M = CONFIG.WALL_MARGIN;
+    const B = CONFIG.BUFF_TIME;
     switch(id) {
         case 0:   // ミナリ: 障害物を設置 + アイテム効果2倍
             for(let k = 0; k < 3; k++) {
                 const a = Math.PI * 2 * k / 3 + Math.random();
-                props.push({ x: Math.max(M, Math.min(CONFIG.STAGE_W - M, x + Math.cos(a) * 110)),
-                             y: Math.max(M, Math.min(CONFIG.STAGE_H - M, y + Math.sin(a) * 110)), t: '🪨' });
+                props.push({ x:x+Math.cos(a)*110, y:y+Math.sin(a)*110, r:40, t:'🪨' });
             }
             buffs.minari = B; pushText("バリケード！アイテム効果2倍", "#fc3", 50, -70);
             break;
@@ -901,9 +901,8 @@ function updateDeliveries() {
         deliveries.splice(i, 1);
         const a = Math.random() * Math.PI * 2;
         const dist = CONFIG.DELIVERY_DIST_MIN + Math.random() * (CONFIG.DELIVERY_DIST_MAX - CONFIG.DELIVERY_DIST_MIN);
-        const M = CONFIG.WALL_MARGIN;
-        const x = Math.max(M, Math.min(CONFIG.STAGE_W - M, worldX + Math.cos(a) * dist));
-        const y = Math.max(M, Math.min(CONFIG.STAGE_H - M, worldY + Math.sin(a) * dist));
+        const x = worldX + Math.cos(a) * dist;
+        const y = worldY + Math.sin(a) * dist;
         drops.push({ x, y, t:'package', kind:order.kind, targetId:order.targetId, val:0 });
         pushText("📦 届いた！拾いに行け", "#0ff", 40, -90);
         playSE('packageLand');
@@ -1020,7 +1019,7 @@ function update() {
     enemyBullets = enemyBullets.filter(b => !b.dead);
     enemies = enemies.filter(e => !e.dead);
     props = props.filter(pr => !pr.dead);
-    drops = drops.filter(d => !d.dead);
+    drops = drops.filter(d => !d.dead && Math.hypot(d.x-worldX,d.y-worldY)<=CONFIG.DROP_DESPAWN_RADIUS);
     floatingTexts = floatingTexts.filter(t => !t.dead);
 }
 
@@ -1031,11 +1030,10 @@ function updatePlayer(p) {
     const nx = worldX + moveVec.x * spd + knockVec.x;
     const ny = worldY + moveVec.y * spd + knockVec.y;
     knockVec.x *= 0.9; knockVec.y *= 0.9;
-    const B = CONFIG.PROP_BLOCK, M = CONFIG.WALL_MARGIN;
-    const blockX = props.some(pr => Math.abs(nx - pr.x) < B && Math.abs(worldY - pr.y) < B);
-    const blockY = props.some(pr => Math.abs(worldX - pr.x) < B && Math.abs(ny - pr.y) < B);
-    if(!blockX) worldX = Math.max(M, Math.min(CONFIG.STAGE_W - M, nx));
-    if(!blockY) worldY = Math.max(M, Math.min(CONFIG.STAGE_H - M, ny));
+    const blockX = props.some(pr => Math.abs(nx-pr.x)<pr.r+12 && Math.abs(worldY-pr.y)<pr.r+12);
+    const blockY = props.some(pr => Math.abs(worldX-pr.x)<pr.r+12 && Math.abs(ny-pr.y)<pr.r+12);
+    if(!blockX) worldX = nx;
+    if(!blockY) worldY = ny;
 }
 
 function updateAttack(p) {
@@ -1177,17 +1175,22 @@ function updateBullets() {
             }
         }
         b.x += b.vx; b.y += b.vy;
-        if(!b.boomerang && !b.overProp && props.some(pr => Math.abs(b.x - pr.x) < 28 && Math.abs(b.y - pr.y) < 28)) b.dead = true;   // 障害物で遮蔽
+        if(!b.boomerang && !b.overProp && props.some(pr => Math.abs(b.x-pr.x)<pr.r+b.size && Math.abs(b.y-pr.y)<pr.r+b.size)) b.dead = true;
         if(--b.l <= 0) b.dead = true;
     });
 }
 
-function replenishProps() {
-    if(frame % CONFIG.PROP_RESPAWN_INTERVAL !== 0 || props.length >= CONFIG.PROP_COUNT) return;
-    let x, y, tries = 0;
-    do { x = Math.random() * CONFIG.STAGE_W; y = Math.random() * CONFIG.STAGE_H; }
-    while(Math.hypot(x - worldX, y - worldY) < CONFIG.PROP_RESPAWN_DIST && ++tries < 20);
-    props.push({ x, y, t: Math.random() > 0.5 ? '🌳' : '🪨' });
+function replenishProps(force=false) {
+    if(!force && frame % CONFIG.PROP_REFRESH_INTERVAL !== 0) return;
+    props = props.filter(pr => Math.hypot(pr.x-worldX,pr.y-worldY)<=CONFIG.PROP_DESPAWN_RADIUS);
+    const target=Math.round(Math.PI*CONFIG.PROP_FIELD_RADIUS**2/(CONFIG.PROP_CELL**2));
+    let tries=0;
+    while(props.length<target && tries++<target*12) {
+        const a=Math.random()*Math.PI*2, r=CONFIG.PROP_SAFE_DIST+Math.sqrt(Math.random())*(CONFIG.PROP_FIELD_RADIUS-CONFIG.PROP_SAFE_DIST);
+        const x=worldX+Math.cos(a)*r, y=worldY+Math.sin(a)*r;
+        if(props.some(pr=>Math.hypot(pr.x-x,pr.y-y)<(pr.r+45))) continue;
+        props.push(randomProp(x,y));
+    }
 }
 
 function spawnEnemies() {
@@ -1200,13 +1203,12 @@ function spawnEnemies() {
     const type = pickEnemyType(t);
     const count = Math.min(type.pack[0] + Math.floor(Math.random() * (type.pack[1] - type.pack[0] + 1)), maxEnemies - enemies.length);
     const angle = Math.random() * Math.PI * 2;
-    const M = CONFIG.WALL_MARGIN;
     for(let i = 0; i < count; i++) {
         const a = angle + (Math.random() - 0.5) * 0.6;
         enemies.push({
             ...type, uid: enemyUid++,
-            x: Math.max(M, Math.min(CONFIG.STAGE_W - M, worldX + Math.cos(a) * (CONFIG.ENEMY_SPAWN_DIST + Math.random() * 80))),
-            y: Math.max(M, Math.min(CONFIG.STAGE_H - M, worldY + Math.sin(a) * (CONFIG.ENEMY_SPAWN_DIST + Math.random() * 80))),
+            x: worldX + Math.cos(a) * (CONFIG.ENEMY_SPAWN_DIST + Math.random() * 80),
+            y: worldY + Math.sin(a) * (CONFIG.ENEMY_SPAWN_DIST + Math.random() * 80),
             hp:type.hp,maxHp:type.hp,phase:Math.floor(Math.random()*600),slowT:0,poisonT:0,rhinoState:type.rhino?'charge':null,rhinoT:type.rhino?30:0
         });
     }
@@ -1220,7 +1222,6 @@ function pickEnemyType(sec) {
 }
 
 function updateEnemies(p) {
-    const B = CONFIG.PROP_BLOCK;
     enemies.forEach(en => {
         const dx = worldX - en.x, dy = worldY - en.y, dist = Math.hypot(dx, dy) || 1;
         // 状態異常: スロー(ラコ)・毒(アウネ)・スローゾーン
@@ -1239,7 +1240,7 @@ function updateEnemies(p) {
             mvx += (-dy/dist) * w; mvy += (dx/dist) * w;
         }
         const nx = en.x + mvx, ny = en.y + mvy;
-        const blockX=props.some(pr=>Math.abs(nx-pr.x)<B&&Math.abs(en.y-pr.y)<B),blockY=props.some(pr=>Math.abs(en.x-pr.x)<B&&Math.abs(ny-pr.y)<B);
+        const blockX=props.some(pr=>Math.abs(nx-pr.x)<pr.r+15&&Math.abs(en.y-pr.y)<pr.r+15),blockY=props.some(pr=>Math.abs(en.x-pr.x)<pr.r+15&&Math.abs(ny-pr.y)<pr.r+15);
         if(!blockX)en.x=nx;if(!blockY)en.y=ny;
         if(en.rhino&&en.rhinoState==='dash'&&(blockX||blockY)){en.rhinoState='charge';en.rhinoT=30;}
 
@@ -1277,18 +1278,20 @@ function updateEnemies(p) {
 function updateBoss(p) {
     const norma = CONFIG.BOSS_NORMA * (bossKills + 1);
     if(!boss && killCount >= norma) {
-        const M = 60;
         const hp=CONFIG.BOSS_HP;
         boss = {
-            x: Math.max(M, Math.min(CONFIG.STAGE_W - M, worldX)),
-            y: Math.max(M, Math.min(CONFIG.STAGE_H - M, worldY - 400)),
+            x:worldX, y:worldY-400,
             hp,maxHp:hp,uid:'B'+bossKills,slowT:0,poisonT:0
         };
         pushText("エリート出現！宝箱を奪え", "#f80", 80, -100);
     }
     if(!boss) return;
     const dx = worldX - boss.x, dy = worldY - boss.y, dist = Math.hypot(dx, dy) || 1;
-    let bsp=CONFIG.BOSS_SPD;if(boss.slowT>0){boss.slowT--;bsp*=boss.slowFactor||.5;}if(zones.some(z=>z.type==='slow'&&Math.hypot(boss.x-z.x,boss.y-z.y)<z.r))bsp*=.5;if(boss.poisonT>0){boss.poisonT--;if(boss.poisonT%30===0)boss.hp-=4*partyMul*(boss.poisonMul||1);}boss.x+=dx/dist*bsp;boss.y+=dy/dist*bsp;
+    let bsp=CONFIG.BOSS_SPD;if(boss.slowT>0){boss.slowT--;bsp*=boss.slowFactor||.5;}if(zones.some(z=>z.type==='slow'&&Math.hypot(boss.x-z.x,boss.y-z.y)<z.r))bsp*=.5;if(boss.poisonT>0){boss.poisonT--;if(boss.poisonT%30===0)boss.hp-=4*partyMul*(boss.poisonMul||1);}
+    const bnx=boss.x+dx/dist*bsp,bny=boss.y+dy/dist*bsp;
+    const bossBlockX=props.some(pr=>Math.abs(bnx-pr.x)<pr.r+35&&Math.abs(boss.y-pr.y)<pr.r+35);
+    const bossBlockY=props.some(pr=>Math.abs(boss.x-pr.x)<pr.r+35&&Math.abs(bny-pr.y)<pr.r+35);
+    if(!bossBlockX)boss.x=bnx;if(!bossBlockY)boss.y=bny;
     if(invulnTimer <= 0 && dist < CONFIG.BOSS_CONTACT_DIST && frame % CONFIG.CONTACT_INTERVAL === 0) {
         knockVec={x:-dx/dist*CONFIG.CONTACT_KNOCK,y:-dy/dist*CONFIG.CONTACT_KNOCK};
         pushText("ぐあぁっ！", "#f00", 40, -50);
@@ -1370,14 +1373,10 @@ function draw() {
     const cx = canvas.width/2, cy = canvas.height/2;
     ctx.fillStyle = "#111"; ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.strokeStyle = "#222"; ctx.lineWidth = 2;
-    for(let i=0; i<=CONFIG.STAGE_W; i+=CONFIG.GRID_SIZE) {
-        ctx.beginPath(); ctx.moveTo(i-worldX+cx, -worldY+cy); ctx.lineTo(i-worldX+cx, CONFIG.STAGE_H-worldY+cy); ctx.stroke();
-    }
-    for(let i=0; i<=CONFIG.STAGE_H; i+=CONFIG.GRID_SIZE) {
-        ctx.beginPath(); ctx.moveTo(-worldX+cx, i-worldY+cy); ctx.lineTo(CONFIG.STAGE_W-worldX+cx, i-worldY+cy); ctx.stroke();
-    }
-    ctx.strokeStyle = "#f0f"; ctx.lineWidth = 4;
-    ctx.strokeRect(-worldX+cx, -worldY+cy, CONFIG.STAGE_W, CONFIG.STAGE_H);
+    const gridX=(((-worldX+cx)%CONFIG.GRID_SIZE)+CONFIG.GRID_SIZE)%CONFIG.GRID_SIZE;
+    const gridY=(((-worldY+cy)%CONFIG.GRID_SIZE)+CONFIG.GRID_SIZE)%CONFIG.GRID_SIZE;
+    for(let x=gridX;x<canvas.width;x+=CONFIG.GRID_SIZE){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,canvas.height);ctx.stroke();}
+    for(let y=gridY;y<canvas.height;y+=CONFIG.GRID_SIZE){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(canvas.width,y);ctx.stroke();}
 
     // 設置ゾーン (スロー=青 / 毒=緑 / ダメージ=橙)
     zones.forEach(z => {
@@ -1387,8 +1386,10 @@ function draw() {
         ctx.globalAlpha = 1;
     });
     ctx.textAlign = "center";
-    ctx.font = "30px Arial";
-    props.forEach(pr => ctx.fillText(pr.t, pr.x-worldX+cx, pr.y-worldY+cy+10));
+    props.forEach(pr => {
+        ctx.font=`${Math.max(24,Math.round(pr.r*0.9))}px Arial`;
+        ctx.fillText(pr.t,pr.x-worldX+cx,pr.y-worldY+cy+pr.r*0.3);
+    });
     const bob = Math.sin(frame * 0.1) * 5;
     ctx.font = "24px Arial";
     drops.forEach(d => ctx.fillText(d.t === 'like' ? '❤' : (d.t === 'package' ? '📦' : (d.t === 'chest' ? CONFIG.ELITE_CHEST_ICON : '🩸')), d.x-worldX+cx, d.y-worldY+cy+bob));
@@ -1456,17 +1457,15 @@ function draw() {
     }
 
     const p = party[activeIdx];
-    // 綱引きゲージ: 12時が中立。右の白側=白♡、左の紫側=黒♡
+    // 綱引きゲージ: 足元バー中央が中立。左=黒、右=白
     const standing = moveVec.x === 0 && moveVec.y === 0 && Math.hypot(knockVec.x, knockVec.y) < 0.5;
-    ctx.lineWidth = 7;
-    ctx.globalAlpha = standing ? (0.75 + 0.25 * Math.sin(frame * 0.25)) : 0.9;
-    ctx.strokeStyle = "#76278a";
-    ctx.beginPath(); ctx.arc(cx, cy, 50, -Math.PI/2, -Math.PI*3/2, true); ctx.stroke();
-    ctx.strokeStyle = "#f6e6cf";
-    ctx.beginPath(); ctx.arc(cx, cy, 50, -Math.PI/2, Math.PI/2); ctx.stroke();
-    const tugAngle = -Math.PI/2 + ((p.sex-CONFIG.GAUGE_CENTER)/CONFIG.GAUGE_CENTER)*Math.PI;
-    ctx.strokeStyle = "#ffef5a"; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx+Math.cos(tugAngle)*47,cy+Math.sin(tugAngle)*47); ctx.stroke();
+    const gaugeX=cx-35,gaugeY=cy+47,edgeDanger=p.sex<=10||p.sex>=90;
+    ctx.globalAlpha=edgeDanger?(0.45+0.55*Math.abs(Math.sin(frame*.25))):(standing?.95:.85);
+    ctx.fillStyle="#76278a";ctx.fillRect(gaugeX,gaugeY,35,6);
+    ctx.fillStyle="#f6e6cf";ctx.fillRect(cx,gaugeY,35,6);
+    ctx.strokeStyle="#111";ctx.lineWidth=1;ctx.strokeRect(gaugeX,gaugeY,70,6);
+    ctx.fillStyle="#fff";ctx.fillRect(cx-1,gaugeY-2,2,10);
+    ctx.fillStyle=edgeDanger?"#ff3b3b":"#ffef5a";ctx.fillRect(gaugeX+p.sex*.7-2,gaugeY-3,4,12);
     ctx.globalAlpha = 1;
     // 白♡持ちの外周リング: CT中=回復アークで残り時間を可視化 / 準備完了=黄色の脈動
     if(p.white > 0) {
@@ -1527,7 +1526,6 @@ function updateHUD() {
         hd += `<span style="color:${col}">♥</span>`;
     }
     document.getElementById('heart-display').innerHTML = hd;
-    document.getElementById('tug-needle').style.left = `${p.sex}%`;
     // バフ/CTのアイコンチップ (💥=爆発CT残り)
     let bd = '';
     if(burstCd > 0) bd += `<span class="buff-chip">💥${Math.ceil(burstCd / 60)}s</span>`;
