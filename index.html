@@ -215,15 +215,15 @@ const CONFIG = {
     CONTACT_CHARGE_LOCK: 60,                                // 接触中/接触後1秒は自力チャージ無効
     ENEMY_BULLET_SEX: 15,
     PICKUP_RADIUS: 50,
-    DROP_LIKE_RATE: 0.35, DROP_BLOOD_RATE: 0.10,
+    DROP_BLOOD_RATE: 0.30,
     PROP_DROP_VAL: 1, ENEMY_DROP_VAL: 1, BOSS_DROP_VAL: 1,
-    BLOOD_SEX_GAIN: 28,                                       // 🩸拾得で快感チャージ (白♡源)
+    BLOOD_PARTY_GAIN: [5, 1, 0.5, 0.2],                       // 🩸拾得: 操作キャラから交代順に分配
     ELITE_ICON: '👹', ELITE_CHEST_ICON: '🎁',
     BOSS_NORMA:50, BOSS_HP:500, BOSS_SPD:1.5, BOSS_CONTACT_DIST:60,
     KILL_INVULN: 60,
     SWITCH_COOLDOWN: 45,
     GAUGE_CENTER: 50,
-    BENCH_CHARGE: 0.03, BENCH_GAUGE_MAX: 95,
+    BENCH_CHARGE: 0.03,
     STAND_CHARGE: 0.07,
     RESIST_GUARD: 0.04,        // 精神力Lvごとの被ゲージ-4%
     RAVAGE_INVULN: 60,         // 蹂躙離脱後の無敵 (救済)
@@ -233,8 +233,6 @@ const CONFIG = {
     // 絶頂爆発 (MAX交代)
     BURST_RADIUS: 300, BURST_DMG: 150,   // ダメージは×atk
     BURST_SCORE: 1000, BURST_INVULN: 30,
-    // 編成人数別の威力倍率 (1人=×4 → 4人=×1。少人数ほど強い)
-    PARTY_ATK: [4, 3, 2, 1],
     RANGE_UNIT: 110,               // 射程1 ≈ 110px (マユゥの射程3=約330px基準)
     BUFF_TIME: 600,                // 「一定時間」系爆発の持続 (10秒)
     BURST_KNOCK_R: 220, BURST_KNOCK: 70,   // 爆発共通の小ノックバック (緊急脱出)
@@ -488,16 +486,15 @@ function updateSetupUI() {
         if(selectedIndices[i] !== undefined) { s.innerHTML = faceHtml(CHAR_DEFS[selectedIndices[i]],'char-thumb'); s.classList.add('filled'); }
         else { s.innerHTML = ''; s.classList.remove('filled'); }
     }
-    // 人数別の威力倍率表示 (1人=×4 → 4人=×1)
     const bonus = document.getElementById('party-bonus');
     const n = selectedIndices.length;
     if(n > 0) {
         const last = CHAR_DEFS[selectedIndices[n - 1]];
-        bonus.innerText = `威力倍率 ×${CONFIG.PARTY_ATK[n - 1]}（少人数ほど強い）｜${last.cn}: ${last.bDesc}`;
-    } else bonus.innerText = "";
+        bonus.innerText = `${n}/4人選択｜${last.cn}: ${last.bDesc}`;
+    } else bonus.innerText = "四重奏を目指す4人を選ぼう";
     const btn = document.getElementById('start-btn');
-    if(selectedIndices.length > 0) { btn.classList.add('active'); btn.innerText = "出撃開始！"; }
-    else { btn.classList.remove('active'); btn.innerText = "キャラを選んでください"; }
+    if(selectedIndices.length === 4) { btn.classList.add('active'); btn.innerText = "4人で出撃開始！"; }
+    else { btn.classList.remove('active'); btn.innerText = `あと${4-selectedIndices.length}人選んでください`; }
 }
 
 // 編成プレビュー: 選択メンバーが歩くミニアニメ
@@ -538,7 +535,7 @@ let sessionScore = 0, maxMult = 1, bossKills = 0;
 let bloodTimer = 0, invulnTimer = 0, spawnTimer = 0, switchTimer = 0, lastEnemyContactFrame = -Infinity;
 let burstFx = null;
 let devices = [], burstCd = 0, keyBurstHeld = false;
-let zones = [], sweepFx = [], buffs = {}, partyMul = 1, enemyUid = 1;
+let zones = [], sweepFx = [], buffs = {}, enemyUid = 1;
 let boss = null;
 let knockVec = {x:0, y:0};
 let deliveries = [];
@@ -560,9 +557,8 @@ function fitCanvas() {
 }
 
 function tryStart() {
-    if(selectedIndices.length === 0) return;
+    if(selectedIndices.length !== 4) return;
     party = selectedIndices.map(i => ({ ...CHAR_DEFS[i], sex:CONFIG.GAUGE_CENTER, dead:false, stun:0, white:0, black:0, reaction:null, reactionUntil:0, facing:-1, lv:1, lvMods:freshLvMods() }));
-    partyMul = CONFIG.PARTY_ATK[party.length - 1];   // 1人=×4 → 4人=×1
     stopPreview();
     resetRun();
     showScene('game');
@@ -676,7 +672,7 @@ window.addEventListener('keyup', e => { if(e.code === 'KeyX') keyBurstHeld = fal
 
 // ---------------- 実効値 ----------------
 function effDmg(p) {
-    let d = p.atk.pow * p.lvMods.powMul * runMods.atkMul * partyMul;
+    let d = p.atk.pow * p.lvMods.powMul * runMods.atkMul;
     if(p.pas === 'blackPower') d *= 1 + p.black * 0.15;   // 瑞珠: 黒♡が多いほど攻撃力UP
     if(buffs.bell > 0) d *= 1.5;                           // ベルペット爆発: 攻撃力UP
     return d;
@@ -800,7 +796,7 @@ function executeBurst(id, x, y, depth = 0) {
         case 2: zones.push({ x, y, r: 250, life: 300, type: 'slow' }); pushText("スローエリア設置", "#08f", 50, -70); break;   // ラコ
         case 3: buffs.bani = B; pushText("興奮状態！被弾も白♡になる", "#f6a", 50, -70); break;   // バーニ
         case 4: {   // リウ: 周囲に中ダメージ
-            const dmg = 60 * runMods.atkMul * partyMul;
+            const dmg = 60 * runMods.atkMul;
             enemies.forEach(en => { if(Math.hypot(en.x - x, en.y - y) < 300) en.hp -= dmg; });
             if(boss && Math.hypot(boss.x - x, boss.y - y) < 300) boss.hp -= dmg;
             pushText("女王の威圧！", "#fd5", 50, -70);
@@ -831,8 +827,8 @@ function executeBurst(id, x, y, depth = 0) {
         case 9: buffs.yuna = B; pushText("大サービス！撃破で必ず❤", "#ffd700", 50, -70); break;   // ユゥナリナ
         case 10: buffs.moko = B; pushText("ラブ全開！停止チャージ大UP", "#f6a", 50, -70); break;   // モコクン
         case 11:   // 瑞珠: 足元にダメージゾーン2つ
-            zones.push({ x, y, r: 220, life: 300, type: 'damage', pow: 5 * runMods.atkMul * partyMul });
-            zones.push({ x: x + 120, y: y + (Math.random() - 0.5) * 160, r: 220, life: 300, type: 'damage', pow: 5 * runMods.atkMul * partyMul });
+            zones.push({ x, y, r: 220, life: 300, type: 'damage', pow: 5 * runMods.atkMul });
+            zones.push({ x: x + 120, y: y + (Math.random() - 0.5) * 160, r: 220, life: 300, type: 'damage', pow: 5 * runMods.atkMul });
             pushText("泥エステ開店", "#fa0", 50, -70);
             break;
     }
@@ -1038,7 +1034,7 @@ function update() {
     const p = party[activeIdx];
     party.forEach((m, i) => {
         if(m.stun > 0) m.stun--;
-        if(i !== activeIdx && !m.dead) m.sex = Math.min(CONFIG.BENCH_GAUGE_MAX, m.sex + CONFIG.BENCH_CHARGE);
+        if(i !== activeIdx && !m.dead && m.white+m.black < m.heartMax-1) addSex(m,CONFIG.BENCH_CHARGE,false);
     });
     for(const k in buffs) if(buffs[k] > 0) buffs[k]--;
     if(bloodTimer > 0) bloodTimer--;
@@ -1300,7 +1296,7 @@ function updateEnemies(p) {
         let esp = en.spd;
         if(en.slowT > 0) { en.slowT--; esp *= en.slowFactor||.5; }
         if(zones.some(z => z.type === 'slow' && Math.hypot(en.x - z.x, en.y - z.y) < z.r)) esp *= 0.5;
-        if(en.poisonT > 0) { en.poisonT--; if(en.poisonT%30===0) en.hp-=4*partyMul*(en.poisonMul||1); }
+        if(en.poisonT > 0) { en.poisonT--; if(en.poisonT%30===0) en.hp-=4*(en.poisonMul||1); }
         // 敵は弾を撃たない。接触と包囲の圧のみ。障害物は通れない(隠れられる)
         let mvx=dx/dist*esp,mvy=dy/dist*esp;
         if(en.rhino){
@@ -1367,7 +1363,7 @@ function updateBoss(p) {
     }
     if(!boss) return;
     const dx = worldX - boss.x, dy = worldY - boss.y, dist = Math.hypot(dx, dy) || 1;
-    let bsp=CONFIG.BOSS_SPD;if(boss.slowT>0){boss.slowT--;bsp*=boss.slowFactor||.5;}if(zones.some(z=>z.type==='slow'&&Math.hypot(boss.x-z.x,boss.y-z.y)<z.r))bsp*=.5;if(boss.poisonT>0){boss.poisonT--;if(boss.poisonT%30===0)boss.hp-=4*partyMul*(boss.poisonMul||1);}
+    let bsp=CONFIG.BOSS_SPD;if(boss.slowT>0){boss.slowT--;bsp*=boss.slowFactor||.5;}if(zones.some(z=>z.type==='slow'&&Math.hypot(boss.x-z.x,boss.y-z.y)<z.r))bsp*=.5;if(boss.poisonT>0){boss.poisonT--;if(boss.poisonT%30===0)boss.hp-=4*(boss.poisonMul||1);}
     const bnx=boss.x+dx/dist*bsp,bny=boss.y+dy/dist*bsp;
     const bossBlockX=props.some(pr=>!(Math.abs(boss.x-pr.x)<pr.r+35&&Math.abs(boss.y-pr.y)<pr.r+35)&&Math.abs(bnx-pr.x)<pr.r+35&&Math.abs(boss.y-pr.y)<pr.r+35);
     const bossBlockY=props.some(pr=>!(Math.abs(boss.x-pr.x)<pr.r+35&&Math.abs(boss.y-pr.y)<pr.r+35)&&Math.abs(boss.x-pr.x)<pr.r+35&&Math.abs(bny-pr.y)<pr.r+35);
@@ -1437,8 +1433,11 @@ function updateDrops(p) {
             grantEliteReward();
             playSE('packageGet');
         } else {
-            // 🩸: 快感チャージ (拾って白♡を貯められる) ＋ 20秒間スコア倍率+0.3
-            addSex(p, CONFIG.BLOOD_SEX_GAIN * itemMul, false);
+            // 🩸: 操作キャラから交代順に減衰分配 ＋ 20秒間スコア倍率+0.3
+            CONFIG.BLOOD_PARTY_GAIN.forEach((gain,offset)=>{
+                const m=party[(activeIdx+offset)%party.length];
+                if(m&&!m.dead)addSex(m,gain*itemMul,false);
+            });
             bloodTimer = CONFIG.BLOOD_SCORE_TIME;
             pushText("快感チャージ +♡", "#f0f", 30, -60);
             playSE('blood');
@@ -1475,7 +1474,6 @@ function draw() {
     });
     party.filter(m=>m.dead&&m.downX!==undefined).forEach(m=>{
         const dx=m.downX-worldX+cx,dy=m.downY-worldY+cy;
-        ctx.fillStyle='rgba(0,0,0,.35)';ctx.beginPath();ctx.ellipse(dx,dy+4,32,9,0,0,Math.PI*2);ctx.fill();
         if(!drawCharacterSprite(ctx,m,'down',dx,dy+10,90,.75,false)){ctx.globalAlpha=.55;ctx.font='44px Arial';ctx.fillText('💀',dx,dy);ctx.globalAlpha=1;}
     });
     const bob = Math.sin(frame * 0.1) * 5;
@@ -1572,7 +1570,6 @@ function draw() {
         ctx.globalAlpha = 1;
     }
     if(invulnTimer <= 0 || frame % 10 < 5) {
-        ctx.fillStyle='rgba(0,0,0,.38)';ctx.beginPath();ctx.ellipse(cx,cy+30,34,10,0,0,Math.PI*2);ctx.fill();
         if(!drawPartyCharacter(ctx,p,cx,cy+30,90,1)){ctx.fillStyle="#eee";ctx.font="60px Arial";ctx.fillText(p.stun>0?"😫":p.e,cx,cy);}
     }
     // 頭上のハート列 (白=爆発の弾薬 / 黒=篭絡デバフ)
