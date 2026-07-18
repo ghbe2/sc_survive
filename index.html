@@ -53,7 +53,9 @@
         .big-btn.ready-glow { border-color: #0f8; box-shadow: 0 0 14px #0f8; color: #cffde8; }
         #time-display { color: #8ff; font-size: 12px; font-weight: bold; }
         .bar-bg { position: relative; width: 100%; height: 12px; background: #333; border-radius: 6px; overflow: hidden; border: 1px solid #555; }
-        #sex-bar { height: 100%; background: linear-gradient(90deg, #f0f, #ff69b4); width: 0%; }
+        #tug-bar { background: linear-gradient(90deg, #6d247f 0 50%, #f6e6cf 50% 100%); overflow: visible; }
+        #tug-bar::after { content:""; position:absolute; left:50%; top:-3px; bottom:-3px; width:2px; background:#fff; transform:translateX(-1px); box-shadow:0 0 5px #fff; }
+        #tug-needle { position:absolute; top:-5px; width:4px; height:22px; border-radius:2px; background:#ffef5a; box-shadow:0 0 7px #ff0; transform:translateX(-2px); }
         #trait-display { color: #ffd700; font-size: 10px; text-align: right; }
         #heart-display { font-size: 15px; letter-spacing: 2px; line-height: 1; text-align: right; }
         #buff-display { text-align: right; }
@@ -113,6 +115,7 @@
         <div id="level-progress"><span id="level-progress-text">Lv0　❤0/4</span><div class="bar-bg"><div id="level-progress-fill"></div></div></div>
         <div class="status-group">
             <div id="time-display">⏱ 0:00</div>
+            <div id="tug-bar" class="bar-bg"><div id="tug-needle"></div></div>
             <div id="heart-display"></div>
             <div id="buff-display"></div>
         </div>
@@ -157,7 +160,7 @@
 // ================================================================
 // 十二支サバイバー v1 開発版 (コアv3: 特性継承・立ち止まりチャージ・宅配ドラフト・ミッション)
 // 基本ループ: かわす → 倒す → 稼ぐ → レベルアップ(宅配ボックス3択) → 強くなる
-// ゲージ: 立ち止まると溜まる。自力MAX→交代で絶頂爆発＋特性継承 / 敵にMAXにされると蹂躙離脱
+// ゲージ: 50起点の綱引き。停止/🩸は白方向、被弾は黒方向。100で白♡、0で黒♡
 // 操作: ドラッグ=移動 / ダブルタップ=交代 / 立ち止まる=チャージ
 // ================================================================
 
@@ -181,19 +184,20 @@ const CONFIG = {
     ENEMY_SPAWN_INTERVAL: 100, SPAWN_MIN_INTERVAL: 40, ENEMY_SPAWN_DIST: 500,
     TARGET_RANGE: 600,
     BULLET_SPEED: 12, BULLET_LIFE: 45, BULLET_SIZE: 5,
-    CONTACT_DIST: 40, CONTACT_INTERVAL: 20, CONTACT_SEX: 4, CONTACT_KNOCK: 12,
+    CONTACT_DIST: 40, CONTACT_INTERVAL: 20, CONTACT_SEX: 6, CONTACT_KNOCK: 12,
     CONTACT_INVULN: 45,
     CONTACT_CHARGE_LOCK: 60,                                // 接触中/接触後1秒は自力チャージ無効
     ENEMY_BULLET_SEX: 15,
     PICKUP_RADIUS: 50,
-    DROP_LIKE_RATE: 0.35, DROP_BLOOD_RATE: 0.42,
+    DROP_LIKE_RATE: 0.35, DROP_BLOOD_RATE: 0.10,
     PROP_DROP_VAL: 1, ENEMY_DROP_VAL: 1, BOSS_DROP_VAL: 1,
     BLOOD_SEX_GAIN: 28,                                       // 🩸拾得で快感チャージ (白♡源)
     ELITE_ICON: '👹', ELITE_CHEST_ICON: '🎁',
     BOSS_NORMA:50, BOSS_HP:500, BOSS_SPD:1.5, BOSS_CONTACT_DIST:60,
     KILL_INVULN: 60,
     SWITCH_COOLDOWN: 45,
-    BENCH_CHARGE: 0.03,        // 控えは99まで自然充電（♡化は操作中のみ）
+    GAUGE_CENTER: 50,
+    BENCH_CHARGE: 0.03, BENCH_GAUGE_MAX: 95,
     STAND_CHARGE: 0.07,
     RESIST_GUARD: 0.04,        // 精神力Lvごとの被ゲージ-4%
     RAVAGE_INVULN: 60,         // 蹂躙離脱後の無敵 (救済)
@@ -220,7 +224,7 @@ const CONFIG = {
     BURST_COOLDOWN: 900,           // 爆発クールタイム (15秒に1回。置き土産の爆発間隔も同じ)
     BURST_COOLDOWN_MIN: 300,
     DEVICE_FIRST_DELAY: 60,        // 置き土産の初弾までのF
-    ENSEMBLE_SCORE: 1000,
+    ENSEMBLE_SCORE: 1000, ENSEMBLE_REARM: 30,
     BOND_SPEED_PER:0.03, BOND_BURST_PER:0.04, BOND_CHARGE_PER:0.03,
     HOMING_TURN: 0.09              // 追尾Lvあたりの旋回力
 };
@@ -474,7 +478,7 @@ let zones = [], sweepFx = [], buffs = {}, partyMul = 1, enemyUid = 1;
 let boss = null;
 let knockVec = {x:0, y:0};
 let deliveries = [];
-let delayedAttacks = [], ensembleFx = null, resultRetryAt = 0;
+let delayedAttacks = [], ensembleFx = null, lastEnsembleFrame = -Infinity, resultRetryAt = 0;
 let runLevel = 0, nextLevelLikes = CONFIG.LEVEL_FIRST, levelDraft = [], buzzFx = null;
 let bondStacks = 0;
 let runMods = null;
@@ -489,7 +493,7 @@ function fitCanvas() { canvas.width = window.innerWidth; canvas.height = window.
 
 function tryStart() {
     if(selectedIndices.length === 0) return;
-    party = selectedIndices.map(i => ({ ...CHAR_DEFS[i], sex:0, dead:false, stun:0, white:0, black:0, lv:1, lvMods:freshLvMods() }));
+    party = selectedIndices.map(i => ({ ...CHAR_DEFS[i], sex:CONFIG.GAUGE_CENTER, dead:false, stun:0, white:0, black:0, lv:1, lvMods:freshLvMods() }));
     partyMul = CONFIG.PARTY_ATK[party.length - 1];   // 1人=×4 → 4人=×1
     stopPreview();
     resetRun();
@@ -516,7 +520,7 @@ function resetRun() {
     bloodTimer = 0; invulnTimer = 0; spawnTimer = CONFIG.ENEMY_SPAWN_INTERVAL; switchTimer = 0; lastEnemyContactFrame = -Infinity;
     burstFx = null;
     boss = null; isOver = false; inGame = true; paused = false;
-    deliveries = []; delayedAttacks = []; ensembleFx = null;
+    deliveries = []; delayedAttacks = []; ensembleFx = null; lastEnsembleFrame = -Infinity;
     runLevel = 0; nextLevelLikes = CONFIG.LEVEL_FIRST; levelDraft = []; buzzFx = null; bondStacks = 0;
     runMods = { atkMul:1, coolMul:1, rangeMul:1, spdMul:1, pickup:0, burstMul:1, chargeMul:1, guardMul:1, sizeMul:1, areaSizeMul:1, bulletSpdMul:1, homing:0, extraAttacks:0, pierce:false, burstCdReduce:0 };
     devices = []; burstCd = 0; keyBurstHeld = false;
@@ -647,6 +651,8 @@ function doSwitch(i) {
     devices = devices.filter(d => d.id !== inId);
     if(devices.length < before) pushText("置き土産を回収した", "#888", 35, -70);
     activeIdx = i;
+    const activeDevices = devices.filter(d => !d.dead && d.left > 0);
+    if(activeDevices.length >= 2) resolveEnsemble(activeDevices.length, party[activeIdx], activeDevices);
     switchTimer = CONFIG.SWITCH_COOLDOWN;
     playSE('switch');
     updateMemberUI();
@@ -673,6 +679,11 @@ function triggerEnsemble(p) {
     const uniqueIds = new Set(active.map(d => d.id));
     const people = 1 + uniqueIds.size;
     if(people < 2) return;
+    resolveEnsemble(people, p, active);
+}
+function resolveEnsemble(people, p, active) {
+    if(frame - lastEnsembleFrame < CONFIG.ENSEMBLE_REARM) return;
+    lastEnsembleFrame = frame;
     active.slice().forEach(fireDevice);
     devices = devices.filter(d => !d.dead);
     addScore(people * people * CONFIG.ENSEMBLE_SCORE);
@@ -774,10 +785,11 @@ function addSex(p, amount, fromEnemy) {
         if(p.pas === 'contactGuard') g *= 0.6;                                // バーニ: 接触の被ゲージが少ない
         if(p.pas === 'contactWeak') g *= 1.5;                                 // ぱふ先生: 接触の被ゲージが多い(弱点)
         amount *= g;
-        if(buffs.bani > 0 && p === party[activeIdx]) fromEnemy = false;       // バーニ爆発中: 被弾も白♡側に貯まる
+        if(buffs.bani > 0 && p === party[activeIdx]) fromEnemy = false;       // バーニ爆発中: 被弾を白方向へ反転
     }
-    p.sex += amount;
-    if(p.sex >= 100) { p.sex = 0; gainHeart(p, fromEnemy); }
+    p.sex = Math.max(0, Math.min(100, p.sex + (fromEnemy ? -amount : amount)));
+    if(p.sex >= 100) { p.sex = CONFIG.GAUGE_CENTER; gainHeart(p, false); }
+    else if(p.sex <= 0) { p.sex = CONFIG.GAUGE_CENTER; gainHeart(p, true); }
 }
 function gainHeart(p, fromEnemy) {
     if(fromEnemy) { p.black++; pushText("篭絡…黒♡+1", "#c6c", 40, -60); playSE('blackHeart'); }
@@ -786,7 +798,7 @@ function gainHeart(p, fromEnemy) {
     updateMemberUI();
 }
 function ravage(p) {
-    p.dead = true; p.sex = 0; p.white = 0;
+    p.dead = true; p.sex = CONFIG.GAUGE_CENTER; p.white = 0;
     pushText(`${p.e} ♡が限界…蹂躙され離脱`, "#f33", 80, -70);
     playSE('ravage');
     const aliveIdx = party.findIndex(m => !m.dead);
@@ -833,7 +845,11 @@ function shuffled(items) {
 }
 function checkLevelUp() {
     if(isOver || paused || buzzFx || sessionLikes < nextLevelLikes) return;
-    const pool = shuffled(party.filter(m=>!m.dead&&m.id!==6));
+    const pendingIds = new Set([
+        ...deliveries.filter(d=>d.kind==='level').map(d=>d.targetId),
+        ...drops.filter(d=>!d.dead&&d.t==='package'&&d.kind==='level').map(d=>d.targetId)
+    ]);
+    const pool = shuffled(party.filter(m=>!m.dead&&m.id!==6&&!pendingIds.has(m.id)));
     if(!pool.length && !party.some(m=>!m.dead&&m.black>0)) return;
     runLevel++;
     nextLevelLikes *= 2;
@@ -922,7 +938,7 @@ function retireRun() {
 // ---------------- スコア ----------------
 function riskMult() {
     const p = party[activeIdx];
-    return 1 + (p.white + p.black) * 0.15 + p.sex / 200 + (bloodTimer > 0 ? CONFIG.BLOOD_SCORE_BONUS : 0);
+    return 1 + (p.white + p.black) * 0.15 + Math.abs(p.sex-CONFIG.GAUGE_CENTER) / 100 + (bloodTimer > 0 ? CONFIG.BLOOD_SCORE_BONUS : 0);
 }
 function addScore(base) { sessionScore += Math.round(base * riskMult()); }
 
@@ -952,7 +968,7 @@ function update() {
     const p = party[activeIdx];
     party.forEach((m, i) => {
         if(m.stun > 0) m.stun--;
-        if(i !== activeIdx && !m.dead) m.sex = Math.min(99, m.sex + CONFIG.BENCH_CHARGE);
+        if(i !== activeIdx && !m.dead) m.sex = Math.min(CONFIG.BENCH_GAUGE_MAX, m.sex + CONFIG.BENCH_CHARGE);
     });
     for(const k in buffs) if(buffs[k] > 0) buffs[k]--;
     if(bloodTimer > 0) bloodTimer--;
@@ -1252,8 +1268,8 @@ function updateEnemies(p) {
             addScore(en.score);
             missionEvent('kill_any');
             if(en.type === 0) missionEvent('kill_wolf');
-            drops.push({ x:en.x, y:en.y, t:'like', val:1 });
-            if(Math.random()<CONFIG.DROP_BLOOD_RATE) drops.push({ x:en.x+12, y:en.y, t:'blood', val:0 });
+            if(Math.random()<CONFIG.DROP_BLOOD_RATE) drops.push({ x:en.x, y:en.y, t:'blood', val:0 });
+            else drops.push({ x:en.x, y:en.y, t:'like', val:1 });
         }
     });
 }
@@ -1322,8 +1338,14 @@ function updateDrops(p) {
             pushText(`❤+${d.val * itemMul}`, "#ff0", 30, -60);
             playSE('coin');
         } else if(d.t === 'package') {
-            if(d.kind==='level') levelUpMember(party.find(m=>m.id===d.targetId));
-            else if(d.kind==='heal'&&p.black>0){p.black--;p.white++;updateMemberUI();}
+            if(d.kind==='level') {
+                const m=party.find(m=>m.id===d.targetId), desc=m ? nextLevelDesc(m) : '';
+                levelUpMember(m);
+                if(m) pushText(`📦 ${m.cn} Lv${m.lv}: ${desc}`, "#0ff", 55, -70);
+            } else if(d.kind==='heal') {
+                if(p.black>0) { p.black--; p.white++; updateMemberUI(); pushText(`📦 ${p.cn} 黒♡→白♡`, "#fff", 55, -70); }
+                else pushText(`📦 ${p.cn} 回復効果なし`, "#888", 40, -70);
+            }
             playSE('packageGet');
         } else if(d.t === 'chest') {
             grantEliteReward();
@@ -1339,7 +1361,7 @@ function updateDrops(p) {
 }
 
 function pushText(t, c, l, dy = -40) {
-    if(!t.startsWith('発送完了')&&!t.startsWith('📦 届いた')) return;
+    if(!t.startsWith('発送完了')&&!t.startsWith('📦')) return;
     floatingTexts.push({ x: canvas.width/2, y: canvas.height/2 + dy, t, c, l });
 }
 
@@ -1434,14 +1456,17 @@ function draw() {
     }
 
     const p = party[activeIdx];
-    // 快感ゲージ = 常時・太いリング (移動中も危機管理できるように)
+    // 綱引きゲージ: 12時が中立。右の白側=白♡、左の紫側=黒♡
     const standing = moveVec.x === 0 && moveVec.y === 0 && Math.hypot(knockVec.x, knockVec.y) < 0.5;
     ctx.lineWidth = 7;
-    ctx.strokeStyle = "rgba(255,255,255,0.12)";
-    ctx.beginPath(); ctx.arc(cx, cy, 50, 0, 7); ctx.stroke();
-    ctx.strokeStyle = p.sex >= 85 ? "#ff3b3b" : "#ff2ff0";   // 危険域(85%以上)は赤
     ctx.globalAlpha = standing ? (0.75 + 0.25 * Math.sin(frame * 0.25)) : 0.9;
-    ctx.beginPath(); ctx.arc(cx, cy, 50, -Math.PI/2, -Math.PI/2 + (p.sex/100) * Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = "#76278a";
+    ctx.beginPath(); ctx.arc(cx, cy, 50, -Math.PI/2, -Math.PI*3/2, true); ctx.stroke();
+    ctx.strokeStyle = "#f6e6cf";
+    ctx.beginPath(); ctx.arc(cx, cy, 50, -Math.PI/2, Math.PI/2); ctx.stroke();
+    const tugAngle = -Math.PI/2 + ((p.sex-CONFIG.GAUGE_CENTER)/CONFIG.GAUGE_CENTER)*Math.PI;
+    ctx.strokeStyle = "#ffef5a"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx+Math.cos(tugAngle)*47,cy+Math.sin(tugAngle)*47); ctx.stroke();
     ctx.globalAlpha = 1;
     // 白♡持ちの外周リング: CT中=回復アークで残り時間を可視化 / 準備完了=黄色の脈動
     if(p.white > 0) {
@@ -1502,6 +1527,7 @@ function updateHUD() {
         hd += `<span style="color:${col}">♥</span>`;
     }
     document.getElementById('heart-display').innerHTML = hd;
+    document.getElementById('tug-needle').style.left = `${p.sex}%`;
     // バフ/CTのアイコンチップ (💥=爆発CT残り)
     let bd = '';
     if(burstCd > 0) bd += `<span class="buff-chip">💥${Math.ceil(burstCd / 60)}s</span>`;
