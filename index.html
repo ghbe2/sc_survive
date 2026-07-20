@@ -2,8 +2,8 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>十二支サバイバー v1-dev</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>しゅがさば v1-dev</title>
     <style>
         :root { --paper:#fdf6ec; --ink:#4a3a48; --pink:#ff5fa2; --yellow:#ffd94a; --cyan:#4adcff; --purple:#b48cff; --mint:#5fe8b0; --sticker-shadow:0 3px 0 rgba(74,58,72,.35); }
         body { margin: 0; overflow: hidden; background: var(--paper); touch-action: none; font-family:"Hiragino Maru Gothic ProN","BIZ UDGothic","Yu Gothic UI",sans-serif; color:var(--ink); user-select:none; -webkit-user-select:none; font-weight:700; }
@@ -109,26 +109,46 @@
         #gesture-hint { color:rgba(74,58,72,.55); text-shadow:0 1px #fff; }
         #heart-display span { -webkit-text-stroke:2px #fff; paint-order:stroke fill; filter:drop-shadow(0 2px 0 rgba(74,58,72,.25)); }
         #ensemble-banner { color:var(--ink); text-shadow:-2px -2px #fff,2px -2px #fff,-2px 2px #fff,2px 2px #fff,0 4px 0 rgba(74,58,72,.3); }
+        /* タイトル＋編成：手帳デコ */
+        .notebook-scene { box-sizing:border-box; padding:calc(env(safe-area-inset-top,0px) + 8px) 12px calc(env(safe-area-inset-bottom,0px) + 10px); gap:8px; }
+        .notebook-head { width:100%; max-width:420px; display:flex; justify-content:flex-start; }
+        .washi-title { position:relative; padding:5px 22px 6px 17px; background:rgba(255,95,162,.72); color:#fff; font-size:25px; line-height:1; transform:rotate(-2deg); text-shadow:0 2px rgba(74,58,72,.25); clip-path:polygon(2% 8%,98% 0,95% 92%,0 100%); }
+        .char-speech { position:relative; width:min(88vw,350px); min-height:38px; box-sizing:border-box; padding:9px 16px; border:3px solid #fff; border-radius:18px; background:#fff7c8; box-shadow:var(--sticker-shadow); font-size:13px; display:flex; align-items:center; justify-content:center; }
+        .char-speech::after { content:""; position:absolute; left:24px; bottom:-10px; border:8px solid transparent; border-top-color:#fff7c8; transform:rotate(12deg); }
+        .paste-board { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; width:100%; max-width:390px; flex:1 0 auto; }
+        .paste-slot { position:relative; min-height:125px; aspect-ratio:1.18; display:flex; align-items:center; justify-content:center; border:3px dashed rgba(180,140,170,.45); border-radius:24px; background:rgba(255,255,255,.48); color:#b9a9b5; font-size:12px; cursor:pointer; overflow:visible; }
+        .paste-slot::before { content:"ぺたっ"; opacity:.45; }
+        .paste-slot.filled { border-color:transparent; background:transparent; box-shadow:none; }
+        .paste-slot.filled::before { display:none; }
+        .paste-slot .paste-img { width:min(34vw,142px); height:min(34vw,142px); object-fit:contain; filter:drop-shadow(0 2px 0 #fff) drop-shadow(0 -2px 0 #fff) drop-shadow(2px 0 0 #fff) drop-shadow(-2px 0 0 #fff); }
+        .paste-slot .fallback-face { font-size:72px; }
+        .paste-name { position:absolute; bottom:4px; left:50%; transform:translateX(-50%); padding:2px 9px; border:2px solid #fff; border-radius:12px; background:var(--yellow); color:var(--ink); font-size:11px; white-space:nowrap; }
+        .paste-slot.just-stuck { animation:petat .28s cubic-bezier(.2,.85,.3,1.3); }
+        @keyframes petat { from { transform:scale(1.15) rotate(var(--sticker-rot)); opacity:.55; } to { transform:scale(1) rotate(var(--sticker-rot)); opacity:1; } }
+        .sticker-sheet { display:grid; grid-template-columns:repeat(6,1fr); gap:4px; width:100%; max-width:390px; padding:7px; box-sizing:border-box; border:3px solid #fff; border-radius:18px; background:rgba(255,255,255,.72); box-shadow:var(--sticker-shadow); }
+        .sticker-sheet .char-card { min-width:0; padding:3px 1px; border:1px dashed #d7c8d2; border-radius:10px; background:#fffdf8; box-shadow:none; transform:none; }
+        .sticker-sheet .char-card .sheet-img { width:42px; max-width:100%; height:42px; object-fit:contain; }
+        .sticker-sheet .char-card .sheet-name { display:block; font-size:8px; overflow:hidden; white-space:nowrap; }
+        .sticker-sheet .char-card.selected { border-color:#d7c8d2; background:rgba(230,220,226,.5); box-shadow:none; }
+        .sticker-sheet .char-card.selected img,.sticker-sheet .char-card.selected .fallback-face { opacity:.14; filter:grayscale(1); }
+        .sticker-sheet .char-card.selected::after { content:"はりつけ中"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#927b8d; font-size:7px; transform:rotate(-12deg); }
+        #start-btn { margin-top:2px; flex:0 0 auto; }
+        .notebook-reset { border:0; background:none; color:#a693a1; font-size:9px; padding:2px 8px; }
+        @media (max-height:670px) { .notebook-scene{gap:4px}.washi-title{font-size:21px}.char-speech{min-height:32px;padding:6px 12px}.paste-slot{min-height:104px}.paste-slot .paste-img{height:112px}.sticker-sheet .char-card .sheet-img{height:34px} }
     </style>
 </head>
 <body>
 
-    <div id="shop-scene" class="scene" style="justify-content:center;">
-        <h1 style="color:#f0f; margin:10px 0; font-size:30px;">十二支サバイバー</h1>
-        <div id="shop-best">BEST SCORE: ---</div>
-        <button onclick="goToSetup()" class="main-btn active" style="margin-top:24px;">編成へ進む</button>
-        <button onclick="resetSave()" style="margin-top:20px; background:none; border:none; color:#555; font-size:10px;">データ初期化</button>
-    </div>
-
-    <div id="setup-scene" class="scene">
-        <h3 style="color:#f0f; margin:5px 0;">出撃メンバー選択</h3>
-        <div id="preview-box"><canvas id="previewCanvas"></canvas></div>
-        <div class="selected-slots"><div class="slot" id="slot-0"></div><div class="slot" id="slot-1"></div><div class="slot" id="slot-2"></div><div class="slot" id="slot-3"></div></div>
-        <div id="char-grid" class="char-grid"></div>
-        <div id="party-bonus" style="font-size:10px; color:#0ff; margin-bottom:4px;"></div>
-        <div style="font-size:10px; color:#888; max-width:400px; margin-bottom:8px;">並び順=交代順。♡を抱えて交代すると置き土産(自動攻撃)や特性継承が発動</div>
-        <button onclick="tryStart()" id="start-btn" class="main-btn">キャラを選んでください</button>
-        <button onclick="backToShop()" style="background:none; border:none; color:#888; margin-top:10px;">ショップへ戻る</button>
+    <div id="shop-scene" class="scene notebook-scene">
+        <div class="notebook-head"><div class="washi-title">しゅがさば</div></div>
+        <div id="char-desc" class="char-speech">シールをえらんでね</div>
+        <div class="paste-board">
+            <div class="paste-slot" id="slot-0" onclick="removeStickerAt(0)"></div><div class="paste-slot" id="slot-1" onclick="removeStickerAt(1)"></div>
+            <div class="paste-slot" id="slot-2" onclick="removeStickerAt(2)"></div><div class="paste-slot" id="slot-3" onclick="removeStickerAt(3)"></div>
+        </div>
+        <div id="char-grid" class="sticker-sheet"></div>
+        <button onclick="tryStart()" id="start-btn" class="main-btn">あと4人選んでください</button>
+        <button onclick="resetSave()" class="notebook-reset">データ初期化</button>
     </div>
 
     <div id="game-ui">
@@ -175,8 +195,7 @@
         <p id="res-likes" style="color:#ffd700; font-size:18px; font-weight:bold;"></p>
         <div id="result-retry-hint">タップでもう1回</div>
         <div style="margin-top:12px;">
-            <button class="result-link" onclick="resultGoSetup(event)">編成を変える</button>
-            <button class="result-link" onclick="resultGoTitle(event)">タイトルへ</button>
+            <button class="result-link" onclick="resultGoSetup(event)">手帳へ戻る</button>
         </div>
     </div>
 
@@ -274,7 +293,7 @@ function cacheCharacterSprite(id,state,img){
 function rebuildSpriteCache(){for(const key in characterSprites){const img=characterSprites[key];if(img.complete&&img.naturalWidth){const [id,state]=key.split(':');cacheCharacterSprite(id,state,img);}}}
 function preloadCharacterSprites(){CHAR_DEFS.forEach(c=>SPRITE_STATES.forEach(state=>{const img=new Image(),key=`${c.id}:${state}`;img.onload=()=>cacheCharacterSprite(c.id,state,img);img.src=spritePath(c.id,state);characterSprites[key]=img;}));}
 function spriteImage(id,state){const key=`${id}:${state}`,cached=characterSpriteCache[key],img=characterSprites[key];return cached||(img&&img.complete&&img.naturalWidth?img:null);}
-function faceHtml(c,cls='char-thumb'){return `<img class="${cls}" src="${spritePath(c.id,'idle_a')}" onload="this.nextElementSibling.style.display='none'" onerror="this.style.display='none'"><span>${c.e}</span>`;}
+function faceHtml(c,cls='char-thumb'){return `<img class="${cls}" src="${spritePath(c.id,'idle_a')}" onload="this.nextElementSibling.style.display='none'" onerror="this.style.display='none'"><span class="fallback-face">${c.e}</span>`;}
 function drawCharacterSprite(g,c,state,x,footY,height=90,alpha=1,flip=false){
     const img=spriteImage(c.id,state);if(!img)return false;
     const width=height*(img.naturalWidth||img.width)/(img.naturalHeight||img.height);g.save();g.globalAlpha=alpha;g.translate(x,footY);if(flip)g.scale(-1,1);g.drawImage(img,-width/2,-height,width,height);g.restore();return true;
@@ -297,29 +316,29 @@ function randomProp(x, y) {
 // pas: 常時パッシブ / onHit: 攻撃ヒット時の付与効果 / bDesc: 爆発(裏の顔)の説明
 // ※移動速度(spd)はシート未定義のため暫定値。ヒロイベオは「攻撃しない」だが人数倍率と噛ませるため豆鉄砲(威力2)を暫定付与
 const CHAR_DEFS = [
-    { id:0,  n:"子", cn:"ミナリ",     e:"🐭", spd:5.0, heartMax:5, pas:'pickup',
+    { id:0,  n:"子", cn:"ミナリ",     e:"🐭", desc:"目の前に物を投げる！　隠れるのがうまい！", spd:5.0, heartMax:5, pas:'pickup',
       atk:{ type:'fanRandom', pow:3,  freq:2,   rng:3 }, bDesc:"障害物を設置＋アイテム効果2倍" },
-    { id:1,  n:"丑", cn:"ベルペット", e:"🐮", spd:3.0, heartMax:5, pas:'whiteGuard',
+    { id:1,  n:"丑", cn:"ベルペット", e:"🐮", desc:"モップでなぎはらう！　打たれ強い！", spd:3.0, heartMax:5, pas:'whiteGuard',
       atk:{ type:'sweep',     pow:10, freq:1,   rng:2 }, bDesc:"攻撃力UP＋被ゲージ減" },
-    { id:2,  n:"寅", cn:"ラコ",       e:"🐯", spd:4.5, heartMax:5, onHit:'slow',
+    { id:2,  n:"寅", cn:"ラコ",       e:"🐯", desc:"ひっかいて敵をおそくする！　にげ足を止める！", spd:4.5, heartMax:5, onHit:'slow',
       atk:{ type:'sweep',     pow:5,  freq:1,   rng:1 }, bDesc:"スローエリアを設置" },
-    { id:3,  n:"卯", cn:"バーニ",     e:"🐰", spd:6.0, heartMax:5, pas:'contactGuard',
+    { id:3,  n:"卯", cn:"バーニ",     e:"🐰", desc:"まわりぜんぶを攻撃！　ぶつかられても平気！", spd:6.0, heartMax:5, pas:'contactGuard',
       atk:{ type:'aura',      pow:5,  freq:1,   rng:1, pierce:true }, bDesc:"被弾でも白♡になる" },
-    { id:4,  n:"辰", cn:"リウ",       e:"🐲", spd:4.0, heartMax:5, pas:'shopCharge',
+    { id:4,  n:"辰", cn:"リウ",       e:"🐲", desc:"つらぬくレーザー！　ここぞの大ばくはつ！", spd:4.0, heartMax:5, pas:'shopCharge',
       atk:{ type:'line',      pow:10, freq:0.5, rng:3, pierce:true }, bDesc:"周囲に中ダメージ" },
-    { id:5,  n:"巳", cn:"アウネ",     e:"🐍", spd:4.5, heartMax:5, onHit:'poison',
+    { id:5,  n:"巳", cn:"アウネ",     e:"🐍", desc:"毒のキスでじわじわ！　毒沼をのこす！", spd:4.5, heartMax:5, onHit:'poison',
       atk:{ type:'line',      pow:3,  freq:2,   rng:2, overProp:true }, bDesc:"毒沼を設置" },
-    { id:6,  n:"午", cn:"ヒロイベオ", e:"🐴", spd:5.5, heartMax:5,
+    { id:6,  n:"午", cn:"ヒロイベオ", e:"🐴", desc:"たたかわない。でも みんなの力を引き出す！", spd:5.5, heartMax:5,
       atk:{ type:'line',      pow:2,  freq:1,   rng:2 }, bDesc:"ランダムな味方の爆発を2回発動" },
-    { id:7,  n:"未", cn:"ぱふ先生",   e:"🐏", spd:3.5, heartMax:5, pas:'contactWeak',
+    { id:7,  n:"未", cn:"ぱふ先生",   e:"🐏", desc:"ぽんぽんはねる絵本なげ！　黒いハートをきれいに！", spd:3.5, heartMax:5, pas:'contactWeak',
       atk:{ type:'fanRandom', pow:5,  freq:1,   rng:3, bounce:1 }, bDesc:"味方の黒♡を白♡に変換" },
-    { id:8,  n:"申", cn:"マユゥ",     e:"🐵", spd:5.2, heartMax:7,
+    { id:8,  n:"申", cn:"マユゥ",     e:"🐵", desc:"まっすぐ強い！　へんしんでチャージ加速！", spd:5.2, heartMax:7,
       atk:{ type:'line',      pow:10, freq:1,   rng:3 }, bDesc:"コスプレ変身(チャージ加速・移動中もチャージ)" },
-    { id:9,  n:"酉", cn:"ユゥナリナ", e:"🐔", spd:5.0, heartMax:5, pas:'whiteRange',
+    { id:9,  n:"酉", cn:"ユゥナリナ", e:"🐔", desc:"ブーメランがいったりきたり！　いいね集めの天才！", spd:5.0, heartMax:5, pas:'whiteRange',
       atk:{ type:'boomerang', pow:10, freq:1,   rng:2, pierce:true }, bDesc:"一定時間、撃破で必ず❤" },
-    { id:10, n:"戌", cn:"モコクン",   e:"🐶", spd:4.8, heartMax:5, pas:'moveCharge',
+    { id:10, n:"戌", cn:"モコクン",   e:"🐶", desc:"近づいてどーん！　歩きながらもたまる！", spd:4.8, heartMax:5, pas:'moveCharge',
       atk:{ type:'line',      pow:12, freq:1,   rng:1 }, bDesc:"停止チャージ大幅UP" },
-    { id:11, n:"亥", cn:"瑞珠",       e:"🐗", spd:4.2, heartMax:5, pas:'blackPower',
+    { id:11, n:"亥", cn:"瑞珠",       e:"🐗", desc:"足元にダメージゾーン！　黒いハートで強くなる！", spd:4.2, heartMax:5, pas:'blackPower',
       atk:{ type:'zone',      pow:5,  freq:1,   rng:0, zoneLife:3, zoneR:1 }, bDesc:"足元にダメージゾーン2つ" }
 ];
 const U=(d,f)=>({d,f});
@@ -426,6 +445,8 @@ function playSE(name, value=0) {
     else if(name==='level') { tone(880,now,.08,'triangle',.12); tone(1760,now+.07,.35,'triangle',.1); }
     else if(name==='packageLand') tone(130,now,.12,'sine',.13,90);
     else if(name==='packageGet') { tone(440,now,.06); tone(880,now+.055,.12); }
+    else if(name==='stickerOn') { noise(now,.045,.045); tone(150,now,.09,'sine',.1,95); }
+    else if(name==='stickerOff') { noise(now,.08,.04); tone(820,now,.055,'triangle',.055,1250); }
     else if(name==='ravage') tone(380,now,.65,'triangle',.13,90);
 }
 function toggleSE() {
@@ -443,39 +464,41 @@ function resetSave() {
 }
 
 // ---------------- シーン管理 ----------------
-const SCENE_IDS = { shop:'shop-scene', setup:'setup-scene', game:'game-ui', result:'result-scene' };
+const SCENE_IDS = { shop:'shop-scene', game:'game-ui', result:'result-scene' };
 function showScene(name) {
     for(const [key, id] of Object.entries(SCENE_IDS)) {
         document.getElementById(id).style.display = (key === name) ? (key === 'game' ? 'block' : 'flex') : 'none';
     }
 }
 
-// ---------------- ショップ ----------------
-function initShop() {
-    document.getElementById('shop-best').innerText = 'BEST SCORE: ' + (saveData.bestScores.length ? saveData.bestScores[0].score.toLocaleString() : '---') + '　最高合奏: ' + ensembleLabel(saveData.bestEnsemble);
-}
-function goToSetup() { showScene('setup'); updateSetupUI(); startPreview(); }
-function backToShop() { stopPreview(); initShop(); showScene('shop'); }
+// ---------------- タイトル＋編成 ----------------
+function initShop() { updateSetupUI(); }
+function goToSetup() { initShop(); showScene('shop'); }
+function backToShop() { initShop(); showScene('shop'); }
 function backToShopFromResult() { initShop(); showScene('shop'); }
 
 // ---------------- 編成 ----------------
 let selectedIndices = [];
+let stickerRotations = {}, lastStickerId = null;
 function initSetupGrid() {
     const grid = document.getElementById('char-grid');
     grid.innerHTML = '';
     CHAR_DEFS.forEach((c, i) => {
         const card = document.createElement('div'); card.className = 'char-card';
-        card.innerHTML = `<div style="font-size:18px">${faceHtml(c)}</div>` +
-            `<span class="trait-tag" style="color:#fd5">${c.cn}</span>` +
-            `<div style="font-size:8px; color:#777;">♡${c.heartMax}</div>`;
+        card.innerHTML = `${faceHtml(c,'sheet-img')}<span class="sheet-name">${c.cn}</span>`;
         card.onclick = () => {
-            if(selectedIndices.includes(i)) selectedIndices = selectedIndices.filter(id => id !== i);
-            else if(selectedIndices.length < 4) selectedIndices.push(i);
+            lastStickerId=i;
+            if(selectedIndices.includes(i)) { selectedIndices=selectedIndices.filter(id=>id!==i); playSE('stickerOff'); }
+            else if(selectedIndices.length<4) { selectedIndices.push(i); stickerRotations[i]=(Math.random()*6-3).toFixed(1); playSE('stickerOn'); }
             updateSetupUI();
         };
         grid.appendChild(card);
     });
-    preCanvas.width = 400; preCanvas.height = 60;
+    updateSetupUI();
+}
+function removeStickerAt(slotIndex) {
+    const id=selectedIndices[slotIndex];if(id===undefined)return;
+    lastStickerId=id;selectedIndices.splice(slotIndex,1);playSE('stickerOff');updateSetupUI();
 }
 function updateSetupUI() {
     document.querySelectorAll('.char-card').forEach((cd, i) => {
@@ -483,46 +506,16 @@ function updateSetupUI() {
     });
     for(let i=0; i<4; i++) {
         const s = document.getElementById(`slot-${i}`);
-        if(selectedIndices[i] !== undefined) { s.innerHTML = faceHtml(CHAR_DEFS[selectedIndices[i]],'char-thumb'); s.classList.add('filled'); }
-        else { s.innerHTML = ''; s.classList.remove('filled'); }
+        const id=selectedIndices[i];
+        if(id!==undefined) { const c=CHAR_DEFS[id];s.innerHTML=`${faceHtml(c,'paste-img')}<span class="paste-name">${c.cn}</span>`;s.classList.add('filled');s.style.setProperty('--sticker-rot',`${stickerRotations[id]||0}deg`);s.style.transform=`rotate(${stickerRotations[id]||0}deg)`;s.classList.toggle('just-stuck',id===lastStickerId); }
+        else { s.innerHTML='';s.classList.remove('filled','just-stuck');s.style.transform=''; }
     }
-    const bonus = document.getElementById('party-bonus');
-    const n = selectedIndices.length;
-    if(n > 0) {
-        const last = CHAR_DEFS[selectedIndices[n - 1]];
-        bonus.innerText = `${n}/4人選択｜${last.cn}: ${last.bDesc}`;
-    } else bonus.innerText = "四重奏を目指す4人を選ぼう";
+    const touched=lastStickerId===null?null:CHAR_DEFS[lastStickerId];
+    document.getElementById('char-desc').innerText=touched?`${touched.cn}　${touched.desc}`:'シールをえらんでね';
     const btn = document.getElementById('start-btn');
-    if(selectedIndices.length === 4) { btn.classList.add('active'); btn.innerText = "4人で出撃開始！"; }
-    else { btn.classList.remove('active'); btn.innerText = `あと${4-selectedIndices.length}人選んでください`; }
-}
-
-// 編成プレビュー: 選択メンバーが歩くミニアニメ
-let previewRaf = 0;
-function startPreview() { cancelAnimationFrame(previewRaf); previewRaf = requestAnimationFrame(drawPreview); }
-function stopPreview() { cancelAnimationFrame(previewRaf); }
-function drawPreview(ts) {
-    preCtx.fillStyle = "#000"; preCtx.fillRect(0, 0, 400, 60);
-    preCtx.strokeStyle = "#1e1e1e"; preCtx.lineWidth = 1;
-    const off = 40 - (ts / 30) % 40;
-    for(let x = off; x < 400; x += 40) { preCtx.beginPath(); preCtx.moveTo(x, 0); preCtx.lineTo(x, 60); preCtx.stroke(); }
-    preCtx.textAlign = "center";
-    if(selectedIndices.length === 0) {
-        preCtx.fillStyle = "#555"; preCtx.font = "12px sans-serif";
-        preCtx.fillText("メンバーを選択してください", 200, 35);
-    } else {
-        selectedIndices.forEach((ci, k) => {
-            const c = CHAR_DEFS[ci];
-            const bounce = Math.abs(Math.sin(ts / 150 + k * 1.3)) * -6;
-            const moveState=Math.floor(ts/250)%2?'move_left_low':'move_left_high';
-            if(!drawCharacterSprite(preCtx,c,moveState,50+k*55,55+bounce,52,1,true)){preCtx.font="28px Arial";preCtx.fillStyle="#eee";preCtx.fillText(c.e,50+k*55,45+bounce);}
-            if(k < selectedIndices.length - 1) {   // 継承の流れる向き
-                preCtx.fillStyle = "#666"; preCtx.font = "12px Arial";
-                preCtx.fillText("▶", 78 + k * 55, 33);
-            }
-        });
-    }
-    previewRaf = requestAnimationFrame(drawPreview);
+    if(selectedIndices.length===4){btn.classList.add('active');btn.innerText='あそぶ！';}
+    else{btn.classList.remove('active');btn.innerText=`あと${4-selectedIndices.length}まい はってね`;}
+    lastStickerId=null;
 }
 
 // ---------------- ラン状態 ----------------
@@ -547,7 +540,6 @@ let missions = [];
 let missionDoneCount = {};
 
 const canvas = document.getElementById('mainCanvas'), ctx = canvas.getContext('2d');
-const preCanvas = document.getElementById('previewCanvas'), preCtx = preCanvas.getContext('2d');
 const joyBase = document.getElementById('joystick-base'), joyStick = document.getElementById('joystick-stick');
 
 function fitCanvas() {
@@ -559,7 +551,6 @@ function fitCanvas() {
 function tryStart() {
     if(selectedIndices.length !== 4) return;
     party = selectedIndices.map(i => ({ ...CHAR_DEFS[i], sex:CONFIG.GAUGE_CENTER, dead:false, stun:0, white:0, black:0, reaction:null, reactionUntil:0, facing:-1, lv:1, lvMods:freshLvMods() }));
-    stopPreview();
     resetRun();
     showScene('game');
     cancelAnimationFrame(rafId);
@@ -570,7 +561,6 @@ function retryRun() {
     tryStart();
 }
 function resultGoSetup(e) { e.stopPropagation(); goToSetup(); }
-function resultGoTitle(e) { e.stopPropagation(); backToShopFromResult(); }
 document.getElementById('result-scene').addEventListener('click', e => {
     if(e.target.closest('.result-link') || Date.now() < resultRetryAt) return;
     retryRun();
